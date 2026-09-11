@@ -15,7 +15,6 @@ repeat task.wait(0.1) until LocalPlayer.Character
     and workspace.CurrentCamera.CameraType ~= nil
 local Camera = workspace.CurrentCamera
 local mouse = LocalPlayer:GetMouse()
-local UserInputService = game:GetService("UserInputService")
 local function createFloatSizeSlider(panelRef, S_ref, UIS_ref)
     local MIN_FLOAT_SIZE = 30
     local MAX_FLOAT_SIZE = 130
@@ -250,12 +249,12 @@ function StopSpectate()
         end
     end
 end
-local DEFAULT_HITBOX_SIZE = 15
-local ESP_COLOR          = Color3.fromRGB(255, 255, 255)
-local ESP_TRACER_COLOR   = Color3.fromRGB(255, 255, 255)
-local ESP_TRANSPARENCY   = 0.7
-local TEXT_ESP_COLOR     = Color3.fromRGB(255, 255, 255)
-local INVIS_CONFIG = {
+S.DEFAULT_HITBOX_SIZE = 15
+S.ESP_COLOR          = Color3.fromRGB(255, 255, 255)
+S.ESP_TRACER_COLOR   = Color3.fromRGB(255, 255, 255)
+S.ESP_TRANSPARENCY   = 0.7
+S.TEXT_ESP_COLOR     = Color3.fromRGB(255, 255, 255)
+S.INVIS_CONFIG = {
     TOGGLE_KEY = Enum.KeyCode.C,
     SOUND_ID = "rbxassetid://139804904213958",
     INVISIBILITY_POSITION = Vector3.new(-25.95, 84, 3537.55),
@@ -426,78 +425,6 @@ local function _playClick()
     s:Play()
     game:GetService("Debris"):AddItem(s, 2)
 end
-local function _mkAimDrop(par, onSel)
-    local TS = game:GetService("TweenService")
-    local IH, HH = 30, 40
-    local pts = {
-        {l="Head",  v="Head"},
-        {l="Body",  v="HumanoidRootPart"},
-    }
-    local ci = 1
-    local w = Instance.new("Frame")
-    w.Size = UDim2.new(1,0,0,HH); w.BackgroundColor3 = Color3.fromRGB(38,38,38)
-    w.BackgroundTransparency = 0.35; w.BorderSizePixel = 0
-    w.ClipsDescendants = true; w.Parent = par
-    Instance.new("UICorner",w).CornerRadius = UDim.new(0,8)
-    local g = Instance.new("UIGradient",w)
-    g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(200,200,255))})
-    g.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.1),NumberSequenceKeypoint.new(1,0.25)})
-    g.Rotation = 90
-    local tl = Instance.new("TextLabel",w)
-    tl.Size=UDim2.new(1,-40,0,13); tl.Position=UDim2.new(0,12,0,4)
-    tl.BackgroundTransparency=1; tl.Text="Target Aimpart"
-    tl.TextColor3=Color3.fromRGB(175,175,200); tl.Font=Enum.Font.Gotham
-    tl.TextSize=10; tl.TextXAlignment=Enum.TextXAlignment.Left
-    local cl = Instance.new("TextLabel",w)
-    cl.Size=UDim2.new(1,-44,0,18); cl.Position=UDim2.new(0,12,0,18)
-    cl.BackgroundTransparency=1; cl.Text=pts[ci].l
-    cl.TextColor3=Color3.fromRGB(255,255,255); cl.Font=Enum.Font.GothamBold
-    cl.TextSize=13; cl.TextXAlignment=Enum.TextXAlignment.Left
-    local ar = Instance.new("TextLabel",w)
-    ar.Size=UDim2.new(0,28,0,HH); ar.Position=UDim2.new(1,-32,0,0)
-    ar.BackgroundTransparency=1; ar.Text="▲"
-    ar.TextColor3=Color3.fromRGB(220,220,220); ar.Font=Enum.Font.GothamBold
-    ar.TextSize=10; ar.TextYAlignment=Enum.TextYAlignment.Center
-    local dv = Instance.new("Frame",w)
-    dv.Size=UDim2.new(1,-24,0,1); dv.Position=UDim2.new(0,12,0,HH)
-    dv.BackgroundColor3=Color3.fromRGB(120,120,140); dv.BackgroundTransparency=0.4
-    dv.BorderSizePixel=0
-    local hb = Instance.new("TextButton",w)
-    hb.Size=UDim2.new(1,0,0,HH); hb.BackgroundTransparency=1; hb.Text=""; hb.ZIndex=5
-    local ibs = {}
-    for i,p in ipairs(pts) do
-        local ib = Instance.new("TextButton",w)
-        ib.Size=UDim2.new(1,-24,0,IH-4)
-        ib.Position=UDim2.new(0,12,0,HH+4+(i-1)*IH)
-        ib.BackgroundTransparency=1; ib.Text=p.l
-        ib.TextColor3=(i==ci) and Color3.fromRGB(255,255,255) or Color3.fromRGB(175,175,200)
-        ib.Font=(i==ci) and Enum.Font.GothamSemibold or Enum.Font.Gotham
-        ib.TextSize=13; ib.TextXAlignment=Enum.TextXAlignment.Left; ib.ZIndex=5
-        ibs[i]=ib
-    end
-    local TH = HH+4+#pts*IH
-    local open = false
-    local function doSel(idx)
-        ci=idx; cl.Text=pts[idx].l
-        for j,ib in ipairs(ibs) do
-            ib.TextColor3=(j==idx) and Color3.fromRGB(255,255,255) or Color3.fromRGB(175,175,200)
-            ib.Font=(j==idx) and Enum.Font.GothamSemibold or Enum.Font.Gotham
-        end
-        onSel(pts[idx].v)
-    end
-    local function tog()
-        open=not open; ar.Text=open and "▼" or "▲"
-        TS:Create(w,TweenInfo.new(0.15,Enum.EasingStyle.Quad),{Size=UDim2.new(1,0,0,open and TH or HH)}):Play()
-    end
-    hb.MouseButton1Click:Connect(function() _playClick(); tog() end)
-    for i,ib in ipairs(ibs) do
-        ib.MouseButton1Click:Connect(function()
-            _playClick(); doSel(i)
-            if open then tog() end
-        end)
-    end
-    return doSel
-end
 local function tableCount(t)
     local n = 0
     for _ in t do n = n + 1 end
@@ -507,7 +434,7 @@ local function getTeamColor(player)
     if player.Team and player.Team.TeamColor then
         return player.Team.TeamColor.Color
     end
-    return ESP_COLOR
+    return S.ESP_COLOR
 end
 local function getESPTeamColor(player)
     if LocalPlayer.Team ~= nil and player.Team == LocalPlayer.Team then
@@ -520,7 +447,7 @@ local function createNotification(title, text)
         StarterGui:SetCore("SendNotification", {
             Title = title,
             Text = text,
-            Duration = INVIS_CONFIG.NOTIFICATION_DURATION,
+            Duration = S.INVIS_CONFIG.NOTIFICATION_DURATION,
         })
     end)
 end
@@ -600,47 +527,243 @@ local function setToggleState(btn, isOn)
         track.BackgroundTransparency = isOn and 0 or 0.35
     end
 end
-local function playInvisSound()
-end
-local function toggleInvisibility()
-    if not LocalPlayer.Character then return end
-    S.isInvisible = not S.isInvisible
-    playInvisSound()
-    local cam = workspace.CurrentCamera
-    if S.isInvisible then
-        local hrp = getHumanoidRootPart()
-        if not hrp then return end
-        local savedCFrame = hrp.CFrame
-        local savedCamCFrame = cam.CFrame
-        cam.CameraType = Enum.CameraType.Scriptable
-        cam.CFrame = savedCamCFrame
-        LocalPlayer.Character:MoveTo(INVIS_CONFIG.INVISIBILITY_POSITION)
-        task.wait(0.1)
-        local seat = Instance.new("Seat")
-        seat.Name = "invischair"
-        seat.Anchored = false
-        seat.CanCollide = false
-        seat.Transparency = 1
-        seat.Size = Vector3.new(2, 0.5, 2)
-        seat.Position = INVIS_CONFIG.INVISIBILITY_POSITION
-        seat.Parent = workspace
-        local weld = Instance.new("Weld")
-        weld.Part0 = seat
-        weld.Part1 = hrp
-        weld.Parent = seat
-        task.wait()
-        task.defer(function()
-            if seat and seat.Parent then
-                seat.CFrame = savedCFrame
+local toggleInvisibility
+local disableInvisibility
+do
+    local INVIS_Y_OFFSET = 1000
+    local invisPlatform = nil
+    local fakeCharacter = nil
+    local motor6DMap = {}
+    local invisHeartbeatConn = nil
+    local invisSteppedConn = nil
+    local invisJumpConn = nil
+
+    local function createFakeCharacter(realChar)
+        local ok, clone = pcall(function()
+            realChar.Archivable = true
+            local c = realChar:Clone()
+            realChar.Archivable = false
+            return c
+        end)
+        if not ok or not clone then return nil end
+
+        for _, descendant in ipairs(clone:GetDescendants()) do
+            if descendant:IsA("Script") or descendant:IsA("LocalScript") or descendant:IsA("Sound") or descendant:IsA("Highlight") then
+                descendant:Destroy()
+            elseif descendant:IsA("BasePart") or descendant:IsA("Decal") then
+                if descendant:IsA("BasePart") then
+                    descendant.Anchored = false
+                end
+                local realPart = realChar:FindFirstChild(descendant.Name, true)
+                if descendant.Name == "HumanoidRootPart" or (realPart and realPart:IsA("BasePart") and realPart.Transparency >= 0.99) then
+                    descendant.Transparency = 1
+                else
+                    descendant.Transparency = 0.5
+                end
+            end
+        end
+
+        motor6DMap = {}
+        for _, descendant in ipairs(realChar:GetDescendants()) do
+            if descendant:IsA("Motor6D") then
+                local current = descendant
+                local path = {}
+                while current and current ~= realChar do
+                    table.insert(path, 1, current.Name)
+                    current = current.Parent
+                end
+                local cloneCurrent = clone
+                for _, name in ipairs(path) do
+                    cloneCurrent = cloneCurrent and cloneCurrent:FindFirstChild(name)
+                end
+                if cloneCurrent and cloneCurrent:IsA("Motor6D") then
+                    motor6DMap[descendant] = cloneCurrent
+                end
+            end
+        end
+
+        clone.Parent = workspace
+        return clone
+    end
+
+    disableInvisibility = function()
+        if invisHeartbeatConn then
+            invisHeartbeatConn:Disconnect()
+            invisHeartbeatConn = nil
+        end
+        if invisSteppedConn then
+            invisSteppedConn:Disconnect()
+            invisSteppedConn = nil
+        end
+        if invisJumpConn then
+            invisJumpConn:Disconnect()
+            invisJumpConn = nil
+        end
+
+        local character = LocalPlayer.Character
+        if character then
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local fakeHRP = fakeCharacter and fakeCharacter:FindFirstChild("HumanoidRootPart")
+            local returnCFrame = fakeHRP and fakeHRP.CFrame
+
+            if fakeCharacter then
+                fakeCharacter:Destroy()
+                fakeCharacter = nil
+            end
+
+            if humanoidRootPart and returnCFrame then
+                humanoidRootPart.CFrame = returnCFrame
+                humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            end
+
+            local camera = workspace.CurrentCamera
+            if camera and humanoid then
+                camera.CameraSubject = humanoid
+            end
+        end
+
+        if invisPlatform then
+            invisPlatform:Destroy()
+            invisPlatform = nil
+        end
+
+        motor6DMap = {}
+        S.isInvisible = false
+        if S.invisButton then
+            setToggleState(S.invisButton, false)
+            S.invisButton.Text = "Invisible: OFF"
+        end
+        if S.invisFloatStroke then
+            setFloatStrokeActive(S.invisFloatStroke, false)
+        end
+    end
+
+    local function enableInvisibility()
+        local character = LocalPlayer.Character
+        if not character then return end
+
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoidRootPart or not humanoid then return end
+
+        local hipHeightOffset = (humanoid.RigType ~= Enum.HumanoidRigType.R6) and (humanoid.HipHeight + humanoidRootPart.Size.Y / 2) or 3
+        local originalPos = humanoidRootPart.Position
+        local groundY = originalPos.Y - hipHeightOffset
+
+        fakeCharacter = createFakeCharacter(character)
+        if not fakeCharacter then return end
+
+        local fakeHRP = fakeCharacter:FindFirstChild("HumanoidRootPart")
+        local fakeHumanoid = fakeCharacter:FindFirstChildOfClass("Humanoid")
+        if not fakeHRP or not fakeHumanoid then
+            if fakeCharacter then fakeCharacter:Destroy() fakeCharacter = nil end
+            return
+        end
+
+        invisPlatform = Instance.new("Part")
+        invisPlatform.Name = "InvisPlatform"
+        invisPlatform.Size = Vector3.new(12, 1, 12)
+        invisPlatform.Anchored = true
+        invisPlatform.CanCollide = true
+        invisPlatform.Transparency = 1
+        invisPlatform.CastShadow = false
+        invisPlatform.Parent = workspace
+        invisPlatform.CFrame = CFrame.new(originalPos.X, groundY + INVIS_Y_OFFSET - 0.5, originalPos.Z)
+
+        fakeHumanoid.WalkSpeed = humanoid.WalkSpeed
+        fakeHumanoid.JumpPower = humanoid.JumpPower
+        fakeHumanoid.JumpHeight = humanoid.JumpHeight
+        fakeHumanoid.UseJumpPower = humanoid.UseJumpPower
+
+        local camera = workspace.CurrentCamera
+        if camera then
+            camera.CameraSubject = fakeHumanoid
+        end
+
+        humanoidRootPart.CFrame = humanoidRootPart.CFrame + Vector3.new(0, INVIS_Y_OFFSET, 0)
+        humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+        invisSteppedConn = RunService.Stepped:Connect(function()
+            if fakeCharacter and character then
+                for realMotor, fakeMotor in pairs(motor6DMap) do
+                    if realMotor and realMotor.Parent and realMotor.Parent.Parent then
+                        fakeMotor.Transform = realMotor.Transform
+                    end
+                end
             end
         end)
-        cam.CameraType = Enum.CameraType.Custom
-        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            cam.CameraSubject = humanoid
-        end
-        setCharacterTransparency(LocalPlayer.Character, 0.5)
-        hrp.Transparency = 1
+
+        invisJumpConn = UserInputService.JumpRequest:Connect(function()
+            if fakeHumanoid then
+                fakeHumanoid.Jump = true
+            end
+        end)
+
+        invisHeartbeatConn = RunService.Heartbeat:Connect(function()
+            if not character or not character.Parent or humanoid.Health <= 0 then
+                if S.isInvisible then
+                    disableInvisibility()
+                end
+                return
+            end
+
+            if humanoidRootPart and fakeCharacter and fakeCharacter.Parent and fakeHRP and fakeHRP.Parent and fakeHumanoid and invisPlatform then
+                local state = fakeHumanoid:GetState()
+                if (state == Enum.HumanoidStateType.Climbing or state == Enum.HumanoidStateType.Swimming or state == Enum.HumanoidStateType.Seated) and state ~= humanoid:GetState() then
+                    humanoid:ChangeState(state)
+                end
+
+                local moveDirection = humanoid.MoveDirection
+                if state == Enum.HumanoidStateType.Climbing then
+                    if camera then
+                        local lookVector = camera.CFrame.LookVector
+                        local unit = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
+                        local dot = humanoid.MoveDirection:Dot(unit)
+                        if dot > 0.1 then
+                            moveDirection = Vector3.new(0, 1, 0)
+                        elseif dot < -0.1 then
+                            moveDirection = Vector3.new(0, -1, 0)
+                        else
+                            moveDirection = Vector3.new(0, 0, 0)
+                        end
+                    end
+                elseif state == Enum.HumanoidStateType.Swimming then
+                    local jumpY = (UserInputService:IsKeyDown(Enum.KeyCode.Space) or humanoid.Jump) and 1 or 0
+                    moveDirection = Vector3.new(moveDirection.X, jumpY, moveDirection.Z)
+                end
+
+                fakeHumanoid:Move(moveDirection, false)
+                fakeHumanoid.Jump = humanoid.Jump
+                fakeHumanoid.WalkSpeed = humanoid.WalkSpeed
+                fakeHumanoid.JumpPower = humanoid.JumpPower
+                fakeHumanoid.JumpHeight = humanoid.JumpHeight
+                fakeHumanoid.UseJumpPower = humanoid.UseJumpPower
+
+                local raycastParams = RaycastParams.new()
+                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                raycastParams.FilterDescendantsInstances = {character, invisPlatform, fakeCharacter}
+
+                local raycastResult = workspace:Raycast(fakeHRP.Position, Vector3.new(0, -500, 0), raycastParams)
+                if raycastResult then
+                    groundY = raycastResult.Position.Y
+                else
+                    groundY = fakeHRP.Position.Y - hipHeightOffset
+                end
+
+                humanoidRootPart.CFrame = fakeHRP.CFrame + Vector3.new(0, INVIS_Y_OFFSET, 0)
+                humanoidRootPart.AssemblyLinearVelocity = fakeHRP.AssemblyLinearVelocity
+                humanoidRootPart.AssemblyAngularVelocity = fakeHRP.AssemblyAngularVelocity
+                invisPlatform.CFrame = CFrame.new(humanoidRootPart.Position.X, groundY + INVIS_Y_OFFSET - 0.5, humanoidRootPart.Position.Z)
+
+                if humanoidRootPart.Position.Y < groundY + INVIS_Y_OFFSET - 15 then
+                    humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position.X, groundY + INVIS_Y_OFFSET + hipHeightOffset + 2, humanoidRootPart.Position.Z)
+                    humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                end
+            end
+        end)
+
+        S.isInvisible = true
         if S.invisButton then
             setToggleState(S.invisButton, true)
             S.invisButton.Text = "Invisible: ON"
@@ -648,24 +771,15 @@ local function toggleInvisibility()
         if S.invisFloatStroke then
             setFloatStrokeActive(S.invisFloatStroke, true)
         end
-    else
-        local chair = workspace:FindFirstChild("invischair")
-        if chair then chair:Destroy() end
-        if LocalPlayer.Character then
-            setCharacterTransparency(LocalPlayer.Character, 0)
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.Transparency = 1 end
-            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                cam.CameraSubject = humanoid
-            end
-        end
-        if S.invisButton then
-            setToggleState(S.invisButton, false)
-            S.invisButton.Text = "Invisible: OFF"
-        end
-        if S.invisFloatStroke then
-            setFloatStrokeActive(S.invisFloatStroke, false)
+    end
+
+    toggleInvisibility = function()
+        local character = LocalPlayer.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+        if S.isInvisible then
+            disableInvisibility()
+        else
+            enableInvisibility()
         end
     end
 end
@@ -694,7 +808,7 @@ local function addBoxESP(character, color, size)
     box.Adornee = head
     box.Size = Vector3.new(size, size, size)
     box.Color3 = color or ESP_BOX_COLOR
-    box.Transparency = ESP_TRANSPARENCY
+    box.Transparency = S.ESP_TRANSPARENCY
     box.ZIndex = 10
     box.AlwaysOnTop = true
     box.Parent = head
@@ -775,7 +889,7 @@ local function createTracerESP(player)
         end
         line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y - 8)
         line.To = Vector2.new(pos.X, pos.Y)
-        line.Color = getTeamColor(player) ~= ESP_COLOR and getTeamColor(player) or ESP_TRACER_COLOR
+        line.Color = getTeamColor(player) ~= S.ESP_COLOR and getTeamColor(player) or S.ESP_TRACER_COLOR
         line.Visible = true
     end)
     S.tracerESPObjects[player] = {
@@ -1070,7 +1184,7 @@ local function onCharacterReady(player, character)
     if not humanoid or not head or not hrp then return end
     repeat task.wait(0.1) until humanoid.Health > 0 or not character.Parent
     if not character.Parent or humanoid.Health <= 0 then return end
-    local size = tonumber(S.sizeInput and S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+    local size = tonumber(S.sizeInput and S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
     if S.autoHitboxEnabled    then pcall(applyHeadHitbox,  player, character, size)          end
     if S.autoBodyHitboxEnabled then pcall(applyBodyHitbox, character, size)                  end
     if S.boxESPEnabled         then pcall(addBoxESP, character, getTeamColor(player), size)  end
@@ -2540,7 +2654,7 @@ do
     _lbl.Font = Enum.Font.GothamBold
     _lbl.TextSize = 14
 end
-S.sizeInput = createTransparentInput("Size (e.g. 15)", tostring(DEFAULT_HITBOX_SIZE), panel2)
+S.sizeInput = createTransparentInput("Size (e.g. 15)", tostring(S.DEFAULT_HITBOX_SIZE), panel2)
 autoToggle = createTransparentButton("Head Hit Box: OFF", Color3.fromRGB(38, 38, 38), panel2)
 setToggleState(autoToggle, false)
 S.btnRefs.autoToggle = autoToggle
@@ -2763,7 +2877,7 @@ local invisFloatToggleBtn = createTransparentButton("Invisible Float: OFF", Colo
 setToggleState(invisFloatToggleBtn, false)
 S.btnRefs.invisFloatToggleBtn = invisFloatToggleBtn
 S.invisSound = Instance.new("Sound")
-S.invisSound.SoundId = INVIS_CONFIG.SOUND_ID
+S.invisSound.SoundId = S.INVIS_CONFIG.SOUND_ID
 S.invisSound.Volume = 0.5
 S.invisSound.Parent = gui
 do
@@ -4070,368 +4184,444 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 refreshFeTools()
 do
-    local _lbl = createTransparentLabel("Aimbot", panel9)
-    _lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-    _lbl.Font = Enum.Font.GothamBold
-    _lbl.TextSize = 14
-    local AimSettings = {
-        AimEnabled          = false,
-        FOV                 = 75,
-        AimPart             = "Head",
-        WallCheck           = false,
-        HPCheck             = true,
-        ShowFOV             = false,
-        TeamCheck           = false,
-        FriendCheck         = false,
-        ForceFieldCheck     = true,
-        Smoothness          = 0.90,
-        FOVOffsetX          = 0,
-        FOVOffsetY          = -55,
-        Prediction          = true,
-        PredictionAmount    = 0.12,
-        AirPrediction       = true,
-        AirPredictionAmount = 0.16,
+    local function _setupAimSection()
+local function _mkAimDrop(par, onSel)
+    local TS = game:GetService("TweenService")
+    local IH, HH = 30, 40
+    local pts = {
+        {l="Head",  v="Head"},
+        {l="Body",  v="HumanoidRootPart"},
     }
-    S.aimSettings = AimSettings
-    local AIM_ON  = Color3.fromRGB(50, 200, 120)
-    local AIM_OFF = Color3.fromRGB(38, 38, 38)
-    local FOV_COL = Color3.fromRGB(80, 255, 100)
-    pcall(function()
-        local cg = game:GetService("CoreGui")
-        if cg:FindFirstChild("AimAssistUI") then cg.AimAssistUI:Destroy() end
-    end)
-    local aimGui = Instance.new("ScreenGui")
-    aimGui.Name             = "AimAssistUI"
-    aimGui.ResetOnSpawn     = false
-    aimGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
-    local _cgOk = pcall(function() aimGui.Parent = game:GetService("CoreGui") end)
-    if not _cgOk then aimGui.Parent = LocalPlayer.PlayerGui end
-    local FOVCircleAim = Instance.new("Frame")
-    FOVCircleAim.Name                   = "FOVCircle"
-    FOVCircleAim.Parent                 = aimGui
-    FOVCircleAim.AnchorPoint            = Vector2.new(0.5, 0.5)
-    FOVCircleAim.BackgroundTransparency = 1
-    FOVCircleAim.BorderSizePixel        = 0
-    FOVCircleAim.ZIndex                 = 999
-    FOVCircleAim.Visible                = AimSettings.ShowFOV
-    do
-        local _fc = Instance.new("UICorner", FOVCircleAim)
-        _fc.CornerRadius = UDim.new(1, 0)
-        local _fs = Instance.new("UIStroke", FOVCircleAim)
-        _fs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        _fs.Color           = FOV_COL
-        _fs.Thickness       = 2
-        _fs.Transparency    = 0.08
+    local ci = 1
+    local w = Instance.new("Frame")
+    w.Size = UDim2.new(1,0,0,HH); w.BackgroundColor3 = Color3.fromRGB(38,38,38)
+    w.BackgroundTransparency = 0.35; w.BorderSizePixel = 0
+    w.ClipsDescendants = true; w.Parent = par
+    Instance.new("UICorner",w).CornerRadius = UDim.new(0,8)
+    local g = Instance.new("UIGradient",w)
+    g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,255,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(200,200,255))})
+    g.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.1),NumberSequenceKeypoint.new(1,0.25)})
+    g.Rotation = 90
+    local tl = Instance.new("TextLabel",w)
+    tl.Size=UDim2.new(1,-40,0,13); tl.Position=UDim2.new(0,12,0,4)
+    tl.BackgroundTransparency=1; tl.Text="Target Aimpart"
+    tl.TextColor3=Color3.fromRGB(175,175,200); tl.Font=Enum.Font.Gotham
+    tl.TextSize=10; tl.TextXAlignment=Enum.TextXAlignment.Left
+    local cl = Instance.new("TextLabel",w)
+    cl.Size=UDim2.new(1,-44,0,18); cl.Position=UDim2.new(0,12,0,18)
+    cl.BackgroundTransparency=1; cl.Text=pts[ci].l
+    cl.TextColor3=Color3.fromRGB(255,255,255); cl.Font=Enum.Font.GothamBold
+    cl.TextSize=13; cl.TextXAlignment=Enum.TextXAlignment.Left
+    local ar = Instance.new("TextLabel",w)
+    ar.Size=UDim2.new(0,28,0,HH); ar.Position=UDim2.new(1,-32,0,0)
+    ar.BackgroundTransparency=1; ar.Text="▲"
+    ar.TextColor3=Color3.fromRGB(220,220,220); ar.Font=Enum.Font.GothamBold
+    ar.TextSize=10; ar.TextYAlignment=Enum.TextYAlignment.Center
+    local dv = Instance.new("Frame",w)
+    dv.Size=UDim2.new(1,-24,0,1); dv.Position=UDim2.new(0,12,0,HH)
+    dv.BackgroundColor3=Color3.fromRGB(120,120,140); dv.BackgroundTransparency=0.4
+    dv.BorderSizePixel=0
+    local hb = Instance.new("TextButton",w)
+    hb.Size=UDim2.new(1,0,0,HH); hb.BackgroundTransparency=1; hb.Text=""; hb.ZIndex=5
+    local ibs = {}
+    for i,p in ipairs(pts) do
+        local ib = Instance.new("TextButton",w)
+        ib.Size=UDim2.new(1,-24,0,IH-4)
+        ib.Position=UDim2.new(0,12,0,HH+4+(i-1)*IH)
+        ib.BackgroundTransparency=1; ib.Text=p.l
+        ib.TextColor3=(i==ci) and Color3.fromRGB(255,255,255) or Color3.fromRGB(175,175,200)
+        ib.Font=(i==ci) and Enum.Font.GothamSemibold or Enum.Font.Gotham
+        ib.TextSize=13; ib.TextXAlignment=Enum.TextXAlignment.Left; ib.ZIndex=5
+        ibs[i]=ib
     end
-    local aimToggleBtn = createTransparentButton("Aimbot: OFF", AIM_OFF, panel9)
-    setToggleState(aimToggleBtn, false)
-    S.btnRefs.aimToggleBtn = aimToggleBtn
-    local wallCheckBtn = createTransparentButton("Wall Check: OFF", AIM_OFF, panel9)
-    setToggleState(wallCheckBtn, AimSettings.WallCheck)
-    S.btnRefs.wallCheckBtn = wallCheckBtn
-    local teamCheckBtn = createTransparentButton("Team Check: OFF", AIM_OFF, panel9)
-    setToggleState(teamCheckBtn, false)
-    S.btnRefs.teamCheckBtn = teamCheckBtn
-   local friendCheckBtn = createTransparentButton("Friend Check: OFF", AIM_OFF, panel9)
-    setToggleState(friendCheckBtn, AimSettings.FriendCheck)
-    S.btnRefs.friendCheckBtn = friendCheckBtn
-    local predictionBtn = createTransparentButton("Prediction: ON", AIM_OFF, panel9)
-    setToggleState(predictionBtn, AimSettings.Prediction)
-    S.btnRefs.predictionBtn = predictionBtn
-    _mkAimDrop(panel9, function(v) AimSettings.AimPart = v end)
-    local function _setupAimFOVSlider(panel, aimSettings, fovCircle)
-        local FOV_MIN = 20
-        local FOV_MAX = 300
-        local UIS2 = game:GetService("UserInputService")
-        local TS2  = game:GetService("TweenService")
-        local fovLabelRow = Instance.new("Frame")
-        fovLabelRow.BackgroundTransparency = 1
-        fovLabelRow.Size   = UDim2.new(1, 0, 0, 16)
-        fovLabelRow.Parent = panel
-        local fovLbl = Instance.new("TextLabel")
-        fovLbl.Size                   = UDim2.new(0.5, 0, 1, 0)
-        fovLbl.BackgroundTransparency = 1
-        fovLbl.Text                   = "FOV"
-        fovLbl.TextColor3             = Color3.fromRGB(180, 180, 180)
-        fovLbl.Font                   = Enum.Font.Gotham
-        fovLbl.TextSize               = 12
-        fovLbl.TextXAlignment         = Enum.TextXAlignment.Left
-        fovLbl.Parent                 = fovLabelRow
-        local fovValLbl = Instance.new("TextLabel")
-        fovValLbl.Size                   = UDim2.new(0.5, 0, 1, 0)
-        fovValLbl.Position               = UDim2.new(0.5, 0, 0, 0)
-        fovValLbl.BackgroundTransparency = 1
-        fovValLbl.Text                   = tostring(aimSettings.FOV)
-        fovValLbl.TextColor3             = Color3.fromRGB(200, 200, 200)
-        fovValLbl.Font                   = Enum.Font.GothamBold
-        fovValLbl.TextSize               = 12
-        fovValLbl.TextXAlignment         = Enum.TextXAlignment.Right
-        fovValLbl.Parent                 = fovLabelRow
-        local sliderWrapper = Instance.new("Frame")
-        sliderWrapper.Size                   = UDim2.new(1, 0, 0, 20)
-        sliderWrapper.BackgroundTransparency = 1
-        sliderWrapper.BorderSizePixel        = 0
-        sliderWrapper.Active                 = true
-        sliderWrapper.Parent                 = panel
-        local trackBg = Instance.new("Frame")
-        trackBg.Size                   = UDim2.new(1, 0, 0, 6)
-        trackBg.Position               = UDim2.new(0, 0, 0.5, -3)
-        trackBg.BackgroundColor3       = Color3.fromRGB(55, 55, 60)
-        trackBg.BackgroundTransparency = 0
-        trackBg.BorderSizePixel        = 0
-        trackBg.Active                 = true
-        trackBg.Parent                 = sliderWrapper
-        Instance.new("UICorner", trackBg).CornerRadius = UDim.new(1, 0)
-        local trackGrad = Instance.new("UIGradient")
-        trackGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(35,35,38)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(70,70,75)),
-        })
-        trackGrad.Rotation = 0
-        trackGrad.Parent   = trackBg
-        local trackFill = Instance.new("Frame")
-        trackFill.Size                = UDim2.new(0, 0, 1, 0)
-        trackFill.BackgroundColor3    = Color3.fromRGB(160, 160, 170)
-        trackFill.BackgroundTransparency = 0
-        trackFill.BorderSizePixel     = 0
-        trackFill.ZIndex              = 2
-        trackFill.Parent              = trackBg
-        Instance.new("UICorner", trackFill).CornerRadius = UDim.new(1, 0)
-        local knob = Instance.new("Frame")
-        knob.Size                   = UDim2.new(0, 14, 0, 14)
-        knob.AnchorPoint            = Vector2.new(0.5, 0.5)
-        knob.Position               = UDim2.new(0, 0, 0.5, 0)
-        knob.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
-        knob.BackgroundTransparency = 0
-        knob.BorderSizePixel        = 0
-        knob.ZIndex                 = 10
-        knob.Active                 = true
-        knob.Parent                 = trackBg
-        Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-        local fovDragging = false
-        local fovDragInput2 = nil
-        local function _setFOV(val)
-            aimSettings.FOV = math.clamp(math.round(val), FOV_MIN, FOV_MAX)
-            local pct = (aimSettings.FOV - FOV_MIN) / (FOV_MAX - FOV_MIN)
-            trackFill.Size   = UDim2.new(pct, 0, 1, 0)
-            knob.Position    = UDim2.new(pct, 0, 0.5, 0)
-            fovValLbl.Text   = tostring(aimSettings.FOV)
-            fovCircle.Size   = UDim2.new(0, aimSettings.FOV * 2, 0, aimSettings.FOV * 2)
+    local TH = HH+4+#pts*IH
+    local open = false
+    local function doSel(idx)
+        ci=idx; cl.Text=pts[idx].l
+        for j,ib in ipairs(ibs) do
+            ib.TextColor3=(j==idx) and Color3.fromRGB(255,255,255) or Color3.fromRGB(175,175,200)
+            ib.Font=(j==idx) and Enum.Font.GothamSemibold or Enum.Font.Gotham
         end
-        _setFOV(aimSettings.FOV)
-        local function _calcFOVFromX(inputX)
-            local absPos  = trackBg.AbsolutePosition.X
-            local absSize = trackBg.AbsoluteSize.X
-            local relX    = math.clamp(inputX - absPos, 0, absSize)
-            _setFOV(FOV_MIN + (relX / absSize) * (FOV_MAX - FOV_MIN))
+        onSel(pts[idx].v)
+    end
+    local function tog()
+        open=not open; ar.Text=open and "▼" or "▲"
+        TS:Create(w,TweenInfo.new(0.15,Enum.EasingStyle.Quad),{Size=UDim2.new(1,0,0,open and TH or HH)}):Play()
+    end
+    hb.MouseButton1Click:Connect(function() _playClick(); tog() end)
+    for i,ib in ipairs(ibs) do
+        ib.MouseButton1Click:Connect(function()
+            _playClick(); doSel(i)
+            if open then tog() end
+        end)
+    end
+    return doSel
+end
+
+        local _lbl = createTransparentLabel("Aimbot", panel9)
+            _lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            _lbl.Font = Enum.Font.GothamBold
+            _lbl.TextSize = 14
+            local AimSettings = {
+                AimEnabled          = false,
+                FOV                 = 75,
+                AimPart             = "Head",
+                WallCheck           = false,
+                HPCheck             = true,
+                ShowFOV             = false,
+                TeamCheck           = false,
+                FriendCheck         = false,
+                ForceFieldCheck     = true,
+                Smoothness          = 0.90,
+                FOVOffsetX          = 0,
+                FOVOffsetY          = -55,
+                Prediction          = true,
+                PredictionAmount    = 0.12,
+                AirPrediction       = true,
+                AirPredictionAmount = 0.16,
+            }
+            S.aimSettings = AimSettings
+            local AIM_ON  = Color3.fromRGB(50, 200, 120)
+            local AIM_OFF = Color3.fromRGB(38, 38, 38)
+            local FOV_COL = Color3.fromRGB(80, 255, 100)
+            pcall(function()
+                local cg = game:GetService("CoreGui")
+                if cg:FindFirstChild("AimAssistUI") then cg.AimAssistUI:Destroy() end
+            end)
+            local aimGui = Instance.new("ScreenGui")
+            aimGui.Name             = "AimAssistUI"
+            aimGui.ResetOnSpawn     = false
+            aimGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
+            local _cgOk = pcall(function() aimGui.Parent = game:GetService("CoreGui") end)
+            if not _cgOk then aimGui.Parent = LocalPlayer.PlayerGui end
+            local FOVCircleAim = Instance.new("Frame")
+            FOVCircleAim.Name                   = "FOVCircle"
+            FOVCircleAim.Parent                 = aimGui
+            FOVCircleAim.AnchorPoint            = Vector2.new(0.5, 0.5)
+            FOVCircleAim.BackgroundTransparency = 1
+            FOVCircleAim.BorderSizePixel        = 0
+            FOVCircleAim.ZIndex                 = 999
+            FOVCircleAim.Visible                = AimSettings.ShowFOV
+            do
+                local _fc = Instance.new("UICorner", FOVCircleAim)
+                _fc.CornerRadius = UDim.new(1, 0)
+                local _fs = Instance.new("UIStroke", FOVCircleAim)
+                _fs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                _fs.Color           = FOV_COL
+                _fs.Thickness       = 2
+                _fs.Transparency    = 0.08
+            end
+            local aimToggleBtn = createTransparentButton("Aimbot: OFF", AIM_OFF, panel9)
+            setToggleState(aimToggleBtn, false)
+            S.btnRefs.aimToggleBtn = aimToggleBtn
+            local wallCheckBtn = createTransparentButton("Wall Check: OFF", AIM_OFF, panel9)
+            setToggleState(wallCheckBtn, AimSettings.WallCheck)
+            S.btnRefs.wallCheckBtn = wallCheckBtn
+            local teamCheckBtn = createTransparentButton("Team Check: OFF", AIM_OFF, panel9)
+            setToggleState(teamCheckBtn, false)
+            S.btnRefs.teamCheckBtn = teamCheckBtn
+           local friendCheckBtn = createTransparentButton("Friend Check: OFF", AIM_OFF, panel9)
+            setToggleState(friendCheckBtn, AimSettings.FriendCheck)
+            S.btnRefs.friendCheckBtn = friendCheckBtn
+            local predictionBtn = createTransparentButton("Prediction: ON", AIM_OFF, panel9)
+            setToggleState(predictionBtn, AimSettings.Prediction)
+            S.btnRefs.predictionBtn = predictionBtn
+            _mkAimDrop(panel9, function(v) AimSettings.AimPart = v end)
+            local function _setupAimFOVSlider(panel, aimSettings, fovCircle)
+                local FOV_MIN = 20
+                local FOV_MAX = 300
+                local UIS2 = game:GetService("UserInputService")
+                local TS2  = game:GetService("TweenService")
+                local fovLabelRow = Instance.new("Frame")
+                fovLabelRow.BackgroundTransparency = 1
+                fovLabelRow.Size   = UDim2.new(1, 0, 0, 16)
+                fovLabelRow.Parent = panel
+                local fovLbl = Instance.new("TextLabel")
+                fovLbl.Size                   = UDim2.new(0.5, 0, 1, 0)
+                fovLbl.BackgroundTransparency = 1
+                fovLbl.Text                   = "FOV"
+                fovLbl.TextColor3             = Color3.fromRGB(180, 180, 180)
+                fovLbl.Font                   = Enum.Font.Gotham
+                fovLbl.TextSize               = 12
+                fovLbl.TextXAlignment         = Enum.TextXAlignment.Left
+                fovLbl.Parent                 = fovLabelRow
+                local fovValLbl = Instance.new("TextLabel")
+                fovValLbl.Size                   = UDim2.new(0.5, 0, 1, 0)
+                fovValLbl.Position               = UDim2.new(0.5, 0, 0, 0)
+                fovValLbl.BackgroundTransparency = 1
+                fovValLbl.Text                   = tostring(aimSettings.FOV)
+                fovValLbl.TextColor3             = Color3.fromRGB(200, 200, 200)
+                fovValLbl.Font                   = Enum.Font.GothamBold
+                fovValLbl.TextSize               = 12
+                fovValLbl.TextXAlignment         = Enum.TextXAlignment.Right
+                fovValLbl.Parent                 = fovLabelRow
+                local sliderWrapper = Instance.new("Frame")
+                sliderWrapper.Size                   = UDim2.new(1, 0, 0, 20)
+                sliderWrapper.BackgroundTransparency = 1
+                sliderWrapper.BorderSizePixel        = 0
+                sliderWrapper.Active                 = true
+                sliderWrapper.Parent                 = panel
+                local trackBg = Instance.new("Frame")
+                trackBg.Size                   = UDim2.new(1, 0, 0, 6)
+                trackBg.Position               = UDim2.new(0, 0, 0.5, -3)
+                trackBg.BackgroundColor3       = Color3.fromRGB(55, 55, 60)
+                trackBg.BackgroundTransparency = 0
+                trackBg.BorderSizePixel        = 0
+                trackBg.Active                 = true
+                trackBg.Parent                 = sliderWrapper
+                Instance.new("UICorner", trackBg).CornerRadius = UDim.new(1, 0)
+                local trackGrad = Instance.new("UIGradient")
+                trackGrad.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(35,35,38)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(70,70,75)),
+                })
+                trackGrad.Rotation = 0
+                trackGrad.Parent   = trackBg
+                local trackFill = Instance.new("Frame")
+                trackFill.Size                = UDim2.new(0, 0, 1, 0)
+                trackFill.BackgroundColor3    = Color3.fromRGB(160, 160, 170)
+                trackFill.BackgroundTransparency = 0
+                trackFill.BorderSizePixel     = 0
+                trackFill.ZIndex              = 2
+                trackFill.Parent              = trackBg
+                Instance.new("UICorner", trackFill).CornerRadius = UDim.new(1, 0)
+                local knob = Instance.new("Frame")
+                knob.Size                   = UDim2.new(0, 14, 0, 14)
+                knob.AnchorPoint            = Vector2.new(0.5, 0.5)
+                knob.Position               = UDim2.new(0, 0, 0.5, 0)
+                knob.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
+                knob.BackgroundTransparency = 0
+                knob.BorderSizePixel        = 0
+                knob.ZIndex                 = 10
+                knob.Active                 = true
+                knob.Parent                 = trackBg
+                Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+                local fovDragging = false
+                local fovDragInput2 = nil
+                local function _setFOV(val)
+                    aimSettings.FOV = math.clamp(math.round(val), FOV_MIN, FOV_MAX)
+                    local pct = (aimSettings.FOV - FOV_MIN) / (FOV_MAX - FOV_MIN)
+                    trackFill.Size   = UDim2.new(pct, 0, 1, 0)
+                    knob.Position    = UDim2.new(pct, 0, 0.5, 0)
+                    fovValLbl.Text   = tostring(aimSettings.FOV)
+                    fovCircle.Size   = UDim2.new(0, aimSettings.FOV * 2, 0, aimSettings.FOV * 2)
+                end
+                _setFOV(aimSettings.FOV)
+                local function _calcFOVFromX(inputX)
+                    local absPos  = trackBg.AbsolutePosition.X
+                    local absSize = trackBg.AbsoluteSize.X
+                    local relX    = math.clamp(inputX - absPos, 0, absSize)
+                    _setFOV(FOV_MIN + (relX / absSize) * (FOV_MAX - FOV_MIN))
+                end
+                sliderWrapper.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                        if fovDragging then return end
+                        fovDragging = true
+                        fovDragInput2 = input
+                        _calcFOVFromX(input.Position.X)
+                        TS2:Create(knob, TweenInfo.new(0.08), { Size = UDim2.new(0, 17, 0, 17) }):Play()
+                    end
+                end)
+                trackBg.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                        if fovDragging then return end
+                        fovDragging = true
+                        fovDragInput2 = input
+                        _calcFOVFromX(input.Position.X)
+                        TS2:Create(knob, TweenInfo.new(0.08), { Size = UDim2.new(0, 17, 0, 17) }):Play()
+                    end
+                end)
+                UIS2.InputChanged:Connect(function(input)
+                    if not fovDragging then return end
+                    if input.UserInputType == Enum.UserInputType.MouseMovement then
+                        _calcFOVFromX(input.Position.X)
+                    elseif input.UserInputType == Enum.UserInputType.Touch and input == fovDragInput2 then
+                        _calcFOVFromX(input.Position.X)
+                    end
+                end)
+                UIS2.InputEnded:Connect(function(input)
+                    if not fovDragging then return end
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or (input.UserInputType == Enum.UserInputType.Touch and input == fovDragInput2) then
+                        fovDragging = false
+                        fovDragInput2 = nil
+                        TS2:Create(knob, TweenInfo.new(0.08), { Size = UDim2.new(0, 14, 0, 14) }):Play()
+                    end
+                end)
+            end
+            _setupAimFOVSlider(panel9, AimSettings, FOVCircleAim)
+            aimToggleBtn.MouseButton1Click:Connect(function()
+                AimSettings.AimEnabled = not AimSettings.AimEnabled
+                AimSettings.ShowFOV    = AimSettings.AimEnabled
+               aimToggleBtn.Text = "Aimbot: " .. (AimSettings.AimEnabled and "ON" or "OFF")
+                setToggleState(aimToggleBtn, AimSettings.AimEnabled)
+                FOVCircleAim.Visible = AimSettings.ShowFOV
+            end)
+            wallCheckBtn.MouseButton1Click:Connect(function()
+                AimSettings.WallCheck = not AimSettings.WallCheck
+                wallCheckBtn.Text = "Wall Check: " .. (AimSettings.WallCheck and "ON" or "OFF")
+                setToggleState(wallCheckBtn, AimSettings.WallCheck)
+            end)
+            teamCheckBtn.MouseButton1Click:Connect(function()
+                AimSettings.TeamCheck = not AimSettings.TeamCheck
+                teamCheckBtn.Text = "Team Check: " .. (AimSettings.TeamCheck and "ON" or "OFF")
+                setToggleState(teamCheckBtn, AimSettings.TeamCheck)
+            end)
+            friendCheckBtn.MouseButton1Click:Connect(function()
+                AimSettings.FriendCheck = not AimSettings.FriendCheck
+                friendCheckBtn.Text = "Friend Check: " .. (AimSettings.FriendCheck and "ON" or "OFF")
+                setToggleState(friendCheckBtn, AimSettings.FriendCheck)
+            end)
+            predictionBtn.MouseButton1Click:Connect(function()
+                AimSettings.Prediction = not AimSettings.Prediction
+                predictionBtn.Text = "Prediction: " .. (AimSettings.Prediction and "ON" or "OFF")
+                setToggleState(predictionBtn, AimSettings.Prediction)
+            end)
+            local function _aimAlive(char)
+            local h = char and char:FindFirstChildOfClass("Humanoid")
+            return h and h.Health > 0
         end
-        sliderWrapper.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                if fovDragging then return end
-                fovDragging = true
-                fovDragInput2 = input
-                _calcFOVFromX(input.Position.X)
-                TS2:Create(knob, TweenInfo.new(0.08), { Size = UDim2.new(0, 17, 0, 17) }):Play()
-            end
+        local AimFriendCache = {}
+        Players.PlayerRemoving:Connect(function(player)
+            AimFriendCache[player.UserId] = nil
         end)
-        trackBg.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                if fovDragging then return end
-                fovDragging = true
-                fovDragInput2 = input
-                _calcFOVFromX(input.Position.X)
-                TS2:Create(knob, TweenInfo.new(0.08), { Size = UDim2.new(0, 17, 0, 17) }):Play()
+        local function _aimFriend(player)
+            if not AimSettings.FriendCheck then return false end
+            local cached = AimFriendCache[player.UserId]
+            if cached ~= nil then
+                return cached
             end
-        end)
-        UIS2.InputChanged:Connect(function(input)
-            if not fovDragging then return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement then
-                _calcFOVFromX(input.Position.X)
-            elseif input.UserInputType == Enum.UserInputType.Touch and input == fovDragInput2 then
-                _calcFOVFromX(input.Position.X)
+            local isFriend = false
+            local ok, res = pcall(function()
+                return LocalPlayer:IsFriendsWith(player.UserId)
+            end)
+            if ok and res then
+                isFriend = true
+            elseif player:GetAttribute("Friendly") == true then
+                isFriend = true
             end
-        end)
-        UIS2.InputEnded:Connect(function(input)
-            if not fovDragging then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or (input.UserInputType == Enum.UserInputType.Touch and input == fovDragInput2) then
-                fovDragging = false
-                fovDragInput2 = nil
-                TS2:Create(knob, TweenInfo.new(0.08), { Size = UDim2.new(0, 14, 0, 14) }):Play()
+            AimFriendCache[player.UserId] = isFriend
+            return isFriend
+        end
+            local function _aimHasFF(char)
+                if not AimSettings.ForceFieldCheck then return false end
+                if char:FindFirstChildOfClass("ForceField") then return true end
+                return char:GetAttribute("SpawnProtected") == true
             end
-        end)
-    end
-    _setupAimFOVSlider(panel9, AimSettings, FOVCircleAim)
-    aimToggleBtn.MouseButton1Click:Connect(function()
-        AimSettings.AimEnabled = not AimSettings.AimEnabled
-        AimSettings.ShowFOV    = AimSettings.AimEnabled
-       aimToggleBtn.Text = "Aimbot: " .. (AimSettings.AimEnabled and "ON" or "OFF")
-        setToggleState(aimToggleBtn, AimSettings.AimEnabled)
-        FOVCircleAim.Visible = AimSettings.ShowFOV
-    end)
-    wallCheckBtn.MouseButton1Click:Connect(function()
-        AimSettings.WallCheck = not AimSettings.WallCheck
-        wallCheckBtn.Text = "Wall Check: " .. (AimSettings.WallCheck and "ON" or "OFF")
-        setToggleState(wallCheckBtn, AimSettings.WallCheck)
-    end)
-    teamCheckBtn.MouseButton1Click:Connect(function()
-        AimSettings.TeamCheck = not AimSettings.TeamCheck
-        teamCheckBtn.Text = "Team Check: " .. (AimSettings.TeamCheck and "ON" or "OFF")
-        setToggleState(teamCheckBtn, AimSettings.TeamCheck)
-    end)
-    friendCheckBtn.MouseButton1Click:Connect(function()
-        AimSettings.FriendCheck = not AimSettings.FriendCheck
-        friendCheckBtn.Text = "Friend Check: " .. (AimSettings.FriendCheck and "ON" or "OFF")
-        setToggleState(friendCheckBtn, AimSettings.FriendCheck)
-    end)
-    predictionBtn.MouseButton1Click:Connect(function()
-        AimSettings.Prediction = not AimSettings.Prediction
-        predictionBtn.Text = "Prediction: " .. (AimSettings.Prediction and "ON" or "OFF")
-        setToggleState(predictionBtn, AimSettings.Prediction)
-    end)
-    local function _aimAlive(char)
-    local h = char and char:FindFirstChildOfClass("Humanoid")
-    return h and h.Health > 0
-end
-local AimFriendCache = {}
-Players.PlayerRemoving:Connect(function(player)
-    AimFriendCache[player.UserId] = nil
-end)
-local function _aimFriend(player)
-    if not AimSettings.FriendCheck then return false end
-    local cached = AimFriendCache[player.UserId]
-    if cached ~= nil then
-        return cached
-    end
-    local isFriend = false
-    local ok, res = pcall(function()
-        return LocalPlayer:IsFriendsWith(player.UserId)
-    end)
-    if ok and res then
-        isFriend = true
-    elseif player:GetAttribute("Friendly") == true then
-        isFriend = true
-    end
-    AimFriendCache[player.UserId] = isFriend
-    return isFriend
-end
-    local function _aimHasFF(char)
-        if not AimSettings.ForceFieldCheck then return false end
-        if char:FindFirstChildOfClass("ForceField") then return true end
-        return char:GetAttribute("SpawnProtected") == true
-    end
-    local function _aimCanSee(part, char)
-        if not AimSettings.WallCheck then return true end
-        local rp = RaycastParams.new()
-        rp.FilterType = Enum.RaycastFilterType.Exclude
-        rp.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-        rp.IgnoreWater = true
-        local result = workspace:Raycast(
-            Camera.CFrame.Position,
-            part.Position - Camera.CFrame.Position,
-            rp
-        )
-        if result then return result.Instance:IsDescendantOf(char) end
-        return true
-    end
-    local function _getClosest()
-        local closest, shortest = nil, AimSettings.FOV
-        local cx = Camera.ViewportSize.X / 2 + AimSettings.FOVOffsetX
-        local cy = Camera.ViewportSize.Y / 2 + AimSettings.FOVOffsetY
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == LocalPlayer then continue end
-            if AimSettings.TeamCheck and LocalPlayer.Team ~= nil and p.Team == LocalPlayer.Team then continue end
-            if _aimFriend(p) then continue end
-            local char = p.Character
-            if char and _aimAlive(char) then
-                if _aimHasFF(char) then continue end
-                local hum  = char:FindFirstChildOfClass("Humanoid")
-                local part = char:FindFirstChild(AimSettings.AimPart)
-                if hum and part then
-                    if AimSettings.HPCheck and hum.Health <= 0 then continue end
-                    if not _aimCanSee(part, char) then continue end
-                    local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(cx, cy)).Magnitude
-                        if d < shortest then shortest = d; closest = part end
+            local function _aimCanSee(part, char)
+                if not AimSettings.WallCheck then return true end
+                local rp = RaycastParams.new()
+                rp.FilterType = Enum.RaycastFilterType.Exclude
+                rp.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+                rp.IgnoreWater = true
+                local result = workspace:Raycast(
+                    Camera.CFrame.Position,
+                    part.Position - Camera.CFrame.Position,
+                    rp
+                )
+                if result then return result.Instance:IsDescendantOf(char) end
+                return true
+            end
+            local function _getClosest()
+                local closest, shortest = nil, AimSettings.FOV
+                local cx = Camera.ViewportSize.X / 2 + AimSettings.FOVOffsetX
+                local cy = Camera.ViewportSize.Y / 2 + AimSettings.FOVOffsetY
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p == LocalPlayer then continue end
+                    if AimSettings.TeamCheck and LocalPlayer.Team ~= nil and p.Team == LocalPlayer.Team then continue end
+                    if _aimFriend(p) then continue end
+                    local char = p.Character
+                    if char and _aimAlive(char) then
+                        if _aimHasFF(char) then continue end
+                        local hum  = char:FindFirstChildOfClass("Humanoid")
+                        local part = char:FindFirstChild(AimSettings.AimPart)
+                        if hum and part then
+                            if AimSettings.HPCheck and hum.Health <= 0 then continue end
+                            if not _aimCanSee(part, char) then continue end
+                            local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+                            if onScreen then
+                                local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(cx, cy)).Magnitude
+                                if d < shortest then shortest = d; closest = part end
+                            end
+                        end
                     end
                 end
+                return closest
             end
-        end
-        return closest
-    end
-    local function _aimAt(part)
-        if not part then return end
-        local pos = part.Position
-        if AimSettings.Prediction then
-            local vel = Vector3.zero
-            pcall(function() vel = part.AssemblyLinearVelocity end)
-            if vel.Magnitude <= 0.05 then pcall(function() vel = part.Velocity end) end
-            local t = AimSettings.PredictionAmount
-            if AimSettings.AirPrediction and math.abs(vel.Y) > 2 then
-                t = AimSettings.AirPredictionAmount
+            local function _aimAt(part)
+                if not part then return end
+                local pos = part.Position
+                if AimSettings.Prediction then
+                    local vel = Vector3.zero
+                    pcall(function() vel = part.AssemblyLinearVelocity end)
+                    if vel.Magnitude <= 0.05 then pcall(function() vel = part.Velocity end) end
+                    local t = AimSettings.PredictionAmount
+                    if AimSettings.AirPrediction and math.abs(vel.Y) > 2 then
+                        t = AimSettings.AirPredictionAmount
+                    end
+                    pos = pos + vel * t
+                end
+                Camera.CFrame = Camera.CFrame:Lerp(
+                    CFrame.new(Camera.CFrame.Position, pos),
+                    AimSettings.Smoothness
+                )
             end
-            pos = pos + vel * t
-        end
-        Camera.CFrame = Camera.CFrame:Lerp(
-            CFrame.new(Camera.CFrame.Position, pos),
-            AimSettings.Smoothness
-        )
-    end
- local currentAimTarget = nil
-local lastAimScan = 0
-local AIM_SCAN_INTERVAL = 0.05
-local SWITCH_THRESHOLD = 40
-local function _isTargetValid(part)
-    if not part or not part.Parent then return false end
-    local char = part.Parent
-    if not _aimAlive(char) then return false end
-    if _aimHasFF(char) then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or (AimSettings.HPCheck and hum.Health <= 0) then return false end
-    if not _aimCanSee(part, char) then return false end
-    local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
-    if not onScreen then return false end
-    local cx = Camera.ViewportSize.X / 2 + AimSettings.FOVOffsetX
-    local cy = Camera.ViewportSize.Y / 2 + AimSettings.FOVOffsetY
-    local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(cx, cy)).Magnitude
-    return d < AimSettings.FOV
-end
-RunService.RenderStepped:Connect(function()
-    local vs = Camera.ViewportSize
-    FOVCircleAim.Position = UDim2.new(
-        0, vs.X / 2 + AimSettings.FOVOffsetX,
-        0, vs.Y / 2 + AimSettings.FOVOffsetY
-    )
-    FOVCircleAim.Size    = UDim2.new(0, AimSettings.FOV * 2, 0, AimSettings.FOV * 2)
-    FOVCircleAim.Visible = AimSettings.ShowFOV
-    if not AimSettings.AimEnabled then
-        currentAimTarget = nil
-        return
-    end
-    if tick() - lastAimScan >= AIM_SCAN_INTERVAL then
-        lastAimScan = tick()
-        if currentAimTarget and _isTargetValid(currentAimTarget) then
-            local sp_cur = Camera:WorldToViewportPoint(currentAimTarget.Position)
+         local currentAimTarget = nil
+        local lastAimScan = 0
+        local AIM_SCAN_INTERVAL = 0.05
+        local SWITCH_THRESHOLD = 40
+        local function _isTargetValid(part)
+            if not part or not part.Parent then return false end
+            local char = part.Parent
+            if not _aimAlive(char) then return false end
+            if _aimHasFF(char) then return false end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum or (AimSettings.HPCheck and hum.Health <= 0) then return false end
+            if not _aimCanSee(part, char) then return false end
+            local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if not onScreen then return false end
             local cx = Camera.ViewportSize.X / 2 + AimSettings.FOVOffsetX
             local cy = Camera.ViewportSize.Y / 2 + AimSettings.FOVOffsetY
-            local curDist = (Vector2.new(sp_cur.X, sp_cur.Y) - Vector2.new(cx, cy)).Magnitude
-            local newTarget, newDist = _getClosest(), math.huge
-            if newTarget then
-                local sp_new = Camera:WorldToViewportPoint(newTarget.Position)
-                newDist = (Vector2.new(sp_new.X, sp_new.Y) - Vector2.new(cx, cy)).Magnitude
-            end
-            if newTarget and newTarget ~= currentAimTarget and (curDist - newDist) >= SWITCH_THRESHOLD then
-                currentAimTarget = newTarget
-            end
-        else
-            currentAimTarget = _getClosest()
+            local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(cx, cy)).Magnitude
+            return d < AimSettings.FOV
         end
+        RunService.RenderStepped:Connect(function()
+            local vs = Camera.ViewportSize
+            FOVCircleAim.Position = UDim2.new(
+                0, vs.X / 2 + AimSettings.FOVOffsetX,
+                0, vs.Y / 2 + AimSettings.FOVOffsetY
+            )
+            FOVCircleAim.Size    = UDim2.new(0, AimSettings.FOV * 2, 0, AimSettings.FOV * 2)
+            FOVCircleAim.Visible = AimSettings.ShowFOV
+            if not AimSettings.AimEnabled then
+                currentAimTarget = nil
+                return
+            end
+            if tick() - lastAimScan >= AIM_SCAN_INTERVAL then
+                lastAimScan = tick()
+                if currentAimTarget and _isTargetValid(currentAimTarget) then
+                    local sp_cur = Camera:WorldToViewportPoint(currentAimTarget.Position)
+                    local cx = Camera.ViewportSize.X / 2 + AimSettings.FOVOffsetX
+                    local cy = Camera.ViewportSize.Y / 2 + AimSettings.FOVOffsetY
+                    local curDist = (Vector2.new(sp_cur.X, sp_cur.Y) - Vector2.new(cx, cy)).Magnitude
+                    local newTarget, newDist = _getClosest(), math.huge
+                    if newTarget then
+                        local sp_new = Camera:WorldToViewportPoint(newTarget.Position)
+                        newDist = (Vector2.new(sp_new.X, sp_new.Y) - Vector2.new(cx, cy)).Magnitude
+                    end
+                    if newTarget and newTarget ~= currentAimTarget and (curDist - newDist) >= SWITCH_THRESHOLD then
+                        currentAimTarget = newTarget
+                    end
+                else
+                    currentAimTarget = _getClosest()
+                end
+            end
+            _aimAt(currentAimTarget)
+        end)
     end
-    _aimAt(currentAimTarget)
-end)
+    _setupAimSection()
 end
 local panels = {panel2, panel3, panel4, panel5, panel6, panel7, panel8, panel9, panel10}
 local function switchTab(idx)
@@ -4643,7 +4833,7 @@ end
         pcall(function()
             if cfg.headHitbox and not S.autoHitboxEnabled then
                 S.autoHitboxEnabled = true
-                local size = tonumber(S.sizeInput and S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+                local size = tonumber(S.sizeInput and S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
                 for _, player in pairs(Players:GetPlayers()) do
                     if player ~= LocalPlayer and player.Character and isAlive(player.Character) then
                         applyHeadHitbox(player.Character, size)
@@ -4655,7 +4845,7 @@ end
         pcall(function()
             if cfg.bodyHitbox and not S.autoBodyHitboxEnabled then
                 S.autoBodyHitboxEnabled = true
-                local size = tonumber(S.sizeInput and S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+                local size = tonumber(S.sizeInput and S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
                 for _, player in pairs(Players:GetPlayers()) do
                     if player ~= LocalPlayer and player.Character and isAlive(player.Character) then
                         applyBodyHitbox(player.Character, size)
@@ -4965,7 +5155,7 @@ end)
 pcall(function()
     if cfg.invisKeyName and Enum.KeyCode[cfg.invisKeyName] then
         S.invisKeyCode = Enum.KeyCode[cfg.invisKeyName]
-        INVIS_CONFIG.TOGGLE_KEY = S.invisKeyCode
+        S.INVIS_CONFIG.TOGGLE_KEY = S.invisKeyCode
         if S.btnRefs.invisBindBtn then
             S.btnRefs.invisBindBtn.Text = cfg.invisKeyName
             S.btnRefs.invisBindBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
@@ -6002,7 +6192,7 @@ end
     else
         setToggleState(autoToggle, false)
     end
-    local size = tonumber(S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+    local size = tonumber(S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
     if S.autoHitboxEnabled then
         if S.autoHitboxEnabled then
     for _, player in pairs(Players:GetPlayers()) do
@@ -6061,7 +6251,7 @@ end
     else
         setToggleState(bodyToggle, false)
     end
-    local size = tonumber(S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+    local size = tonumber(S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
     if S.autoBodyHitboxEnabled then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and isAlive(player.Character) then
@@ -6618,7 +6808,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             else
                 if S.waitingForKeybind == "Invisible" then
                     S.invisKeyCode = newKey
-                    INVIS_CONFIG.TOGGLE_KEY = newKey
+                    S.INVIS_CONFIG.TOGGLE_KEY = newKey
                     if S.btnRefs.invisBindBtn then
                         S.btnRefs.invisBindBtn.Text = tostring(newKey):gsub("Enum.KeyCode.", "")
                         S.btnRefs.invisBindBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
@@ -6657,7 +6847,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then
         return
     end
-    if input.KeyCode == (S.invisKeyCode or INVIS_CONFIG.TOGGLE_KEY) then
+    if input.KeyCode == (S.invisKeyCode or S.INVIS_CONFIG.TOGGLE_KEY) then
         _playClick()
         toggleInvisibility()
         return
@@ -6730,19 +6920,9 @@ if S.flyFloatEnabled then
         updateFlyFloatVisual()
     end
 end
-    S.isInvisible = false
-if S.invisButton then
-    setToggleState(S.invisButton, false)
-    S.invisButton.Text = "Invisible: OFF"
-end
-if S.invisFloatEnabled then
-    updateInvisFloatVisual()
-end
-    local chair = workspace:FindFirstChild("invischair")
-    if chair then chair:Destroy() end
-    setCharacterTransparency(character, 0)
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if hrp then hrp.Transparency = 1 end
+    if S.isInvisible then
+        disableInvisibility()
+    end
 end)
 Players.PlayerAdded:Connect(function(player)
     registerPlayer(player)
@@ -6750,8 +6930,9 @@ Players.PlayerAdded:Connect(function(player)
 end)
 Players.PlayerRemoving:Connect(function(player)
     if player == LocalPlayer then
-        local chair = workspace:FindFirstChild("invischair")
-        if chair then chair:Destroy() end
+        if S.isInvisible then
+            disableInvisibility()
+        end
         return
     end
     unregisterPlayer(player)
@@ -6797,7 +6978,7 @@ task.spawn(function()
     while true do
         task.wait(2)
         if S.autoHitboxEnabled then
-            local size = tonumber(S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+            local size = tonumber(S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
             for _, player in pairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer then
                     local char = player.Character
@@ -6815,7 +6996,7 @@ task.spawn(function()
     while true do
         task.wait(1.1)
         if S.autoBodyHitboxEnabled then
-            local size = tonumber(S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+            local size = tonumber(S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
             local count = 0
             for _, player in pairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer and player.Character and isAlive(player.Character) then
@@ -6853,7 +7034,7 @@ task.spawn(function()
                         pcall(addChams, char, getTeamColor(player))
                     end
                     if S.autoHitboxEnabled then
-                        local hSize = tonumber(S.sizeInput and S.sizeInput.Text) or DEFAULT_HITBOX_SIZE
+                        local hSize = tonumber(S.sizeInput and S.sizeInput.Text) or S.DEFAULT_HITBOX_SIZE
                         if not S.processedChars[char] then
                             pcall(applyHeadHitbox, player, char, hSize)
                         elseif not char:FindFirstChild("StarCrowOutline") then
