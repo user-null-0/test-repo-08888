@@ -1,14 +1,31 @@
 local teleport_func = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or getgenv().queue_on_teleport
 
+local currentResetMin = tonumber(getgenv and getgenv().AutoResetMinute) or tonumber(_G.AutoResetMinute)
+pcall(function()
+    if isfile and isfile("BurgerResetTime.txt") then
+        local saved = tonumber(readfile("BurgerResetTime.txt"))
+        if saved and saved > 0 and not currentResetMin then
+            currentResetMin = saved
+        end
+    end
+end)
+if currentResetMin and writefile then
+    pcall(function()
+        writefile("BurgerResetTime.txt", tostring(currentResetMin))
+    end)
+end
+
 if teleport_func then
     pcall(function()
-        teleport_func([[
+        local resetVal = currentResetMin or 3
+        teleport_func(string.format([[
             repeat task.wait() until game:IsLoaded()
             task.wait(1.5)
+            getgenv().AutoResetMinute = %s
             pcall(function()
                 loadstring(game:HttpGet("https://raw.githubusercontent.com/user-null-0/test-repo-08888/refs/heads/main/AutoFarmBuger"))()
             end)
-        ]])
+        ]], tostring(resetVal)))
     end)
 end
 
@@ -37,7 +54,7 @@ local Config = {
     KillAuraDistance = 1000,
     AutoFarmEnabled = true,
     BringBurger = true,
-    AutoResetMinutes = tonumber(getgenv and getgenv().AutoResetMinute) or tonumber(_G.AutoResetMinute) or 3
+    AutoResetMinutes = currentResetMin or 3
 }
 
 pcall(function()
@@ -520,4 +537,3 @@ do
         end
     end)
 end
-
