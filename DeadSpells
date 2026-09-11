@@ -34,6 +34,7 @@ local Config = {
     BringBurger = false,
     BringMana = false,
     BringHeal = false,
+    BringPotionDistance = 6,
     AutoBringMobs = false,
     BringMobRange = 100,
     BringMobOffset = 15,
@@ -1197,7 +1198,7 @@ RunService.RenderStepped:Connect(function()
         currentManaTarget = #manaQueue > 0 and table.remove(manaQueue, 1) or nil
     end
     if currentManaTarget then
-        currentManaTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -2.5))
+        currentManaTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
     end
 end)
 
@@ -1213,7 +1214,7 @@ RunService.RenderStepped:Connect(function()
         currentHealTarget = #healQueue > 0 and table.remove(healQueue, 1) or nil
     end
     if currentHealTarget then
-        currentHealTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -2.5))
+        currentHealTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
     end
 end)
 
@@ -1943,6 +1944,18 @@ Tabs.Misc:AddToggle("BringHealToggle", {
     Default = Config.BringHeal,
     Callback = function(Value)
         Config.BringHeal = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Misc:AddSlider("BringPotionDistanceSlider", {
+    Title = "Potion Distance",
+    Default = Config.BringPotionDistance or 6,
+    Min = 3,
+    Max = 15,
+    Rounding = 1,
+    Callback = function(Value)
+        Config.BringPotionDistance = Value
         SaveConfig()
     end
 })
