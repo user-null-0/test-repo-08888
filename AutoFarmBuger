@@ -114,6 +114,37 @@ local function isMelee(tool)
     return cfg and cfg:GetAttribute("Type") == "Melee"
 end
 
+local originalSoundVolumes = setmetatable({}, { __mode = "k" })
+
+local function isAttackSound(name)
+    local sName = string.lower(name or "")
+    return string.find(sName, "slash") or string.find(sName, "swing") or string.find(sName, "hit") or string.find(sName, "attack") or string.find(sName, "melee") or string.find(sName, "woosh") or string.find(sName, "sword")
+end
+
+local function silenceAttackSounds(parent)
+    if not parent then return end
+    for _, obj in ipairs(parent:GetDescendants()) do
+        if obj:IsA("Sound") and isAttackSound(obj.Name) then
+            if originalSoundVolumes[obj] == nil then
+                originalSoundVolumes[obj] = obj.Volume > 0 and obj.Volume or 1
+            end
+            pcall(function()
+                obj.Volume = 0
+                obj:Stop()
+            end)
+        end
+    end
+end
+
+local function restoreAllSounds()
+    for obj, origVol in pairs(originalSoundVolumes) do
+        if obj and obj.Parent then
+            pcall(function() obj.Volume = origVol end)
+        end
+    end
+    table.clear(originalSoundVolumes)
+end
+
 local function activateHeldTool()
     local char = LocalPlayer.Character
     if not char then return end
@@ -123,11 +154,15 @@ local function activateHeldTool()
     if tool and isMelee(tool) then
         pcall(function()
             tool:Activate()
-            if Config.KillAuraEnabled and animator then
-                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                    local animName = string.lower(track.Name or "")
-                    if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
-                        track:Stop(0)
+            if Config.KillAuraEnabled then
+                silenceAttackSounds(tool)
+                silenceAttackSounds(char)
+                if animator then
+                    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                        local animName = string.lower(track.Name or "")
+                        if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
+                            track:Stop(0)
+                        end
                     end
                 end
             end
@@ -145,6 +180,25 @@ local function hookCharAnimations(char)
         local animName = string.lower(track.Name or "")
         if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
             track:Stop(0)
+        end
+    end)
+    char.DescendantAdded:Connect(function(obj)
+        if obj:IsA("Sound") and isAttackSound(obj.Name) then
+            if originalSoundVolumes[obj] == nil then
+                originalSoundVolumes[obj] = obj.Volume > 0 and obj.Volume or 1
+            end
+            if Config.KillAuraEnabled then
+                pcall(function()
+                    obj.Volume = 0
+                    obj:Stop()
+                end)
+            end
+            obj.Played:Connect(function()
+                if Config.KillAuraEnabled then
+                    obj.Volume = 0
+                    obj:Stop()
+                end
+            end)
         end
     end)
 end
