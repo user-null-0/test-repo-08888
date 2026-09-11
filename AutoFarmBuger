@@ -117,9 +117,42 @@ end
 local function activateHeldTool()
     local char = LocalPlayer.Character
     if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local animator = hum and hum:FindFirstChildOfClass("Animator")
     local tool = char:FindFirstChildWhichIsA("Tool")
-    if tool then pcall(function() tool:Activate() end) end
+    if tool and isMelee(tool) then
+        pcall(function()
+            tool:Activate()
+            if Config.KillAuraEnabled and animator then
+                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                    local animName = string.lower(track.Name or "")
+                    if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
+                        track:Stop(0)
+                    end
+                end
+            end
+        end)
+    end
 end
+
+local function hookCharAnimations(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    local animator = hum:WaitForChild("Animator", 5)
+    if not animator then return end
+    animator.AnimationPlayed:Connect(function(track)
+        if not Config.KillAuraEnabled then return end
+        local animName = string.lower(track.Name or "")
+        if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
+            track:Stop(0)
+        end
+    end)
+end
+
+if LocalPlayer.Character then
+    hookCharAnimations(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(hookCharAnimations)
 
 task.spawn(function()
     while true do
