@@ -743,17 +743,6 @@ end)
 
 local activeNPCESP = {}
 
-local function getNPCColor(npc)
-    local hrp = npc:FindFirstChild("HumanoidRootPart")
-    if hrp and hrp:IsA("BasePart") then return hrp.Color end
-    for _, part in ipairs(npc:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            return part.Color
-        end
-    end
-    return Color3.fromRGB(255, 100, 100)
-end
-
 local function setupNPCESP(npc)
     if not isValidNPC(npc) then return end
     if activeNPCESP[npc] then return end
@@ -762,38 +751,58 @@ local function setupNPCESP(npc)
     local root = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Head")
     if not hum or not root then return end
 
-    local npcColor = getNPCColor(npc)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "StarCrowNPCESP"
+    billboard.Adornee = root
+    billboard.Size = UDim2.new(0, 200, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = math.huge
+    billboard.Enabled = Config.NPCESPEnabled
 
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "StarCrowNPCChams"
-    highlight.FillColor = Color3.fromRGB(0, 0, 0)
-    highlight.OutlineColor = Color3.fromRGB(220, 80, 80)
-    highlight.FillTransparency = 1
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = Config.NPCESPEnabled
-    highlight.Parent = npc
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Name = "InfoLabel"
+    textLabel.Parent = billboard
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextScaled = false
+    textLabel.TextSize = 12
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.RichText = true
+
+    pcall(function() billboard.Parent = game:GetService("CoreGui") end)
+    if not billboard.Parent then billboard.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
     activeNPCESP[npc] = {
-        highlight = highlight,
-        hum = hum
+        billboard = billboard,
+        label = textLabel,
+        hum = hum,
+        root = root,
+        name = npc.Name
     }
 end
 
 local function cleanupNPCESP(npc)
     local data = activeNPCESP[npc]
     if not data then return end
-    pcall(function() data.highlight:Destroy() end)
+    pcall(function() data.billboard:Destroy() end)
     activeNPCESP[npc] = nil
 end
 
 local function updateNPCESP()
     for npc, data in pairs(activeNPCESP) do
-        if not npc or not npc.Parent or data.hum.Health <= 0 then
+        if not npc or not npc.Parent or not data.root.Parent or data.hum.Health <= 0 then
             cleanupNPCESP(npc)
         else
             local on = Config.NPCESPEnabled
-            data.highlight.Enabled = on
+            data.billboard.Enabled = on
+            if on then
+                local hp = math.floor(data.hum.Health)
+                data.label.Text = string.format('<font color="#ffffff">%s</font>\n<font color="#00ff00">%d HP</font>', data.name, hp)
+            end
         end
     end
 end
@@ -1726,7 +1735,7 @@ Tabs.ESP:AddToggle("ESPBurgersToggle", {
 })
 
 Tabs.ESP:AddToggle("ESPNPCToggle", {
-    Title = "ESP NPC",
+    Title = "ESP Mob",
     Default = Config.NPCESPEnabled,
     Callback = function(Value)
         Config.NPCESPEnabled = Value
