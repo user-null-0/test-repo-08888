@@ -1,16 +1,3 @@
-local teleport_func = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or getgenv().queue_on_teleport
-
-if teleport_func then
-    pcall(function()
-        teleport_func([[
-            repeat task.wait() until game:IsLoaded()
-            task.wait(1.5)
-            pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/user-null-0/test-repo-08888/refs/heads/main/DeadSpells"))()
-            end)
-        ]])
-    end)
-end
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
@@ -85,8 +72,6 @@ local Config = {
     },
     KillAuraEnabled = false,
     KillAuraDistance = 500,
-    AutoFarmEnabled = false,
-    AutoResetMinutes = 5,
     AutoPickGoldBagEnabled = false,
     AutoHealEnabled = false,
     AutoHealThreshold = 50,
@@ -1223,12 +1208,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-local function teleportPlayer(cframePos)
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        char.HumanoidRootPart.CFrame = cframePos
-    end
-end
+
 
 local mineParams = RaycastParams.new()
 mineParams.FilterType = Enum.RaycastFilterType.Include
@@ -1388,275 +1368,56 @@ local function isMelee(tool)
     return cfg and cfg:GetAttribute("Type") == "Melee"
 end
 
-local autoClickRunning = false
-local autoFarmStartTime = 0
-
 local function activateHeldTool()
     local char = LocalPlayer.Character
     if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local animator = hum and hum:FindFirstChildOfClass("Animator")
     local tool = char:FindFirstChildWhichIsA("Tool")
-    if tool then pcall(function() tool:Activate() end) end
-end
-
-local function stopAutoClick()
-    autoClickRunning = false
-end
-
-local function startAutoClick()
-    stopAutoClick()
-    autoClickRunning = true
-    autoFarmStartTime = tick()
-    task.spawn(function()
-        while autoClickRunning do
-            activateHeldTool()
-            task.wait(1)
-        end
-    end)
-end
-
-task.spawn(function()
-    while task.wait(0.5) do
-        if not Config.AutoFarmEnabled then continue end
-
-        local char = LocalPlayer.Character
-        if char then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if not tool or not isMelee(tool) then
-                for _, t in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                    if t:IsA("Tool") and isMelee(t) then
-                        t.Parent = char
-                        break
+    if tool and isMelee(tool) then
+        pcall(function()
+            tool:Activate()
+            if Config.KillAuraEnabled and animator then
+                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                    local animName = string.lower(track.Name or "")
+                    local animId = track.Animation and track.Animation.AnimationId or ""
+                    if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
+                        track:Stop(0)
                     end
                 end
             end
-        end
-
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        if not pg then continue end
-        for _, v in ipairs(pg:GetDescendants()) do
-            if v:IsA("TextLabel") or v:IsA("TextButton") then
-                if string.find(string.lower(v.Text or ""), "play again") then
-                    local btn = v:IsA("TextButton") and v or v.Parent
-                    if btn and btn:IsA("GuiButton") and btn.Visible then
-                        pcall(function()
-                            if getconnections then
-                                for _, e in ipairs(getconnections(btn.Activated)) do e:Fire() end
-                                for _, e in ipairs(getconnections(btn.MouseButton1Click)) do e:Fire() end
-                                for _, e in ipairs(getconnections(btn.MouseButton1Down)) do e:Fire() end
-                            end
-                            if firesignal then
-                                firesignal(btn.Activated)
-                                firesignal(btn.MouseButton1Click)
-                                firesignal(btn.MouseButton1Down)
-                            end
-                            local absPos = btn.AbsolutePosition
-                            local absSize = btn.AbsoluteSize
-                            local inset = GuiService:GetGuiInset()
-                            local cx = absPos.X + absSize.X / 2
-                            local cy = absPos.Y + absSize.Y / 2 + inset.Y
-                            if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-                                VirtualInputManager:SendTouchEvent(cx, cy, true)
-                                task.wait(0.1)
-                                VirtualInputManager:SendTouchEvent(cx, cy, false)
-                            else
-                                VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
-                                task.wait(0.1)
-                                VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
-                            end
-                        end)
-                    end
-                end
-            end
-        end
-    end
-end)
-
-local cachedBosses = {}
-
-local bossTargets = {
-    mastersamurai = true,
-    eldervampire = true,
-    gnomechampion = true,
-    steamborneczar = true,
-    kingice = true,
-}
-
-local function getBossKey(model)
-    local name = string.gsub(string.lower(model.Name), "%s+", "")
-    for n in pairs(bossTargets) do
-        if string.find(name, n) then return n end
-    end
-    return nil
-end
-
-local function registerBoss(v)
-    local key = getBossKey(v)
-    if not key then return end
-    local hum = v:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health > 0 then
-        cachedBosses[key] = v
-        hum.Died:Connect(function()
-            if cachedBosses[key] == v then cachedBosses[key] = nil end
         end)
     end
 end
 
-for _, v in ipairs(workspace:GetDescendants()) do
-    if v:IsA("Model") then registerBoss(v) end
+local function hookCharAnimations(char)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    local animator = hum:WaitForChild("Animator", 5)
+    if not animator then return end
+    animator.AnimationPlayed:Connect(function(track)
+        if not Config.KillAuraEnabled then return end
+        local animName = string.lower(track.Name or "")
+        if string.find(animName, "slash") or string.find(animName, "attack") or string.find(animName, "swing") or string.find(animName, "hit") or string.find(animName, "melee") or string.find(animName, "punch") or track.Priority == Enum.AnimationPriority.Action or track.Priority == Enum.AnimationPriority.Action4 then
+            track:Stop(0)
+        end
+    end)
 end
 
-workspace.DescendantAdded:Connect(function(v)
-    if v:IsA("Model") then registerBoss(v) end
-end)
-
-workspace.DescendantRemoving:Connect(function(v)
-    if not v:IsA("Model") then return end
-    local key = getBossKey(v)
-    if key and cachedBosses[key] == v then cachedBosses[key] = nil end
-end)
-
-local bosses = {
-    { n = "mastersamurai", pos = CFrame.new(103.27, 40.89, -3560.05) },
-    { n = "eldervampire", pos = CFrame.new(103.08, 37.85, 7407.76) },
-    { n = "gnomechampion", pos = CFrame.new(37.76, 3.00, 13993.09) },
-    { n = "steamborneczar", pos = CFrame.new(-15.31, 3.02, 27032.90) },
-    { n = "kingice", pos = CFrame.new(24.27, 3.00, 45907.91) },
-}
-
-local skyIslandPos = CFrame.new(-46.56, 81.52, 37536.83)
-local currentIdx = 1
-local hoverPos = nil
-local visited = false
-local engaged = false
-local visitedSkyIsland = false
-
-RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if not char or not hoverPos or not Config.AutoFarmEnabled then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.CFrame = hoverPos
-        hrp.Velocity = Vector3.new(0, 0, 0)
-    end
-end)
+if LocalPlayer.Character then
+    hookCharAnimations(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(hookCharAnimations)
 
 task.spawn(function()
-    while task.wait(0.1) do
-        if not Config.AutoFarmEnabled then
-            hoverPos = nil
-            continue
-        end
-
-        local char = LocalPlayer.Character
-        if not char then continue end
-
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChild("Humanoid")
-        if not hrp or not hum then continue end
-
-        if autoFarmStartTime > 0 and tick() - autoFarmStartTime >= Config.AutoResetMinutes * 60 then
-            pcall(function()
-                local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
-                for _ = 1, 3 do
-                    Remotes.Reset.fireServer()
-                    task.wait(1)
-                end
-            end)
-            hoverPos = nil
-            visited = false
-            engaged = false
-            visitedSkyIsland = false
-            currentIdx = 1
-            autoFarmStartTime = tick()
-            continue
-        end
-
-        if hum.Health <= 0 then
-            hoverPos = nil
-            visited = false
-            engaged = false
-            visitedSkyIsland = false
-            currentIdx = 1
-            task.wait(1)
-            continue
-        end
-
-        if currentIdx <= #bosses then
-            local info = bosses[currentIdx]
-            local targetBoss = cachedBosses[info.n]
-
-            if targetBoss then
-                local bHrp = targetBoss:FindFirstChild("HumanoidRootPart")
-                local bHum = targetBoss:FindFirstChildOfClass("Humanoid")
-
-                if bHrp and bHum and bHum.Health > 0 then
-                    if not visited then
-                        hoverPos = nil
-                        hrp.CFrame = info.pos
-                        hrp.Anchored = true
-                        task.wait(2)
-                        hrp.Anchored = false
-                        visited = true
-                    end
-                    engaged = true
-                    bHrp.CFrame = CFrame.new(info.pos.Position)
-                    bHrp.Velocity = Vector3.new(0, 0, 0)
-                    hoverPos = CFrame.lookAt(info.pos.Position + Vector3.new(0, 15, 0), info.pos.Position)
-                elseif bHum and bHum.Health <= 0 then
-                    task.wait(3)
-                    engaged = false
-                    visited = false
-                    hoverPos = nil
-                    currentIdx = currentIdx + 1
-                end
-            else
-                if engaged then
-                    task.wait(3)
-                    engaged = false
-                    visited = false
-                    hoverPos = nil
-                    currentIdx = currentIdx + 1
-                else
-                    if not visited then
-                        hoverPos = nil
-                        hrp.CFrame = info.pos
-                        hrp.Anchored = true
-                        task.wait(2)
-                        hrp.Anchored = false
-                        visited = true
-                    end
-                    hoverPos = CFrame.new(info.pos.Position + Vector3.new(0, 15, 0))
-                end
-            end
-        else
-            if not visitedSkyIsland then
-                hoverPos = nil
-                hrp.CFrame = skyIslandPos
-                hrp.Anchored = true
-                task.wait(2)
-                hrp.Anchored = false
-                visitedSkyIsland = true
-                hoverPos = skyIslandPos
-            end
-
-            if #itemQueue == 0 and currentTarget == nil then
-                task.wait(3)
-                if #itemQueue == 0 and currentTarget == nil then
-                    hoverPos = nil
-                    visitedSkyIsland = false
-                    currentIdx = 1
-                    autoFarmStartTime = tick()
-                    task.spawn(function()
-                        pcall(function()
-                            local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
-                            Remotes.Reset.fireServer()
-                        end)
-                    end)
-                end
-            end
+    while true do
+        task.wait(0.12)
+        if Config.KillAuraEnabled then
+            activateHeldTool()
         end
     end
 end)
+
 
 local Window = Fluent:CreateWindow({
     Title = "StarCrowHub",
@@ -1670,10 +1431,8 @@ local Window = Fluent:CreateWindow({
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-    AutoFarm = Window:AddTab({ Title = "Auto Farm", Icon = "swords" }),
     ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
     Player = Window:AddTab({ Title = "Player", Icon = "user" }),
-    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map" }),
     Misc = Window:AddTab({ Title = "Misc", Icon = "box" }),
     AirWeld = Window:AddTab({ Title = "Interesting", Icon = "rbxassetid://6862780932" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
@@ -2099,38 +1858,6 @@ Tabs.Player:AddToggle("InfJumpToggle", {
     end
 })
 
-Tabs.Teleport:AddSection("Tp Locations")
-Tabs.Teleport:AddButton({ Title = "Sky Island", Callback = function() teleportPlayer(CFrame.new(-46.56, 81.52, 37536.83)) end })
-Tabs.Teleport:AddButton({ Title = "Cart", Callback = function()
-    local cart = workspace:FindFirstChild("Cart")
-    if cart then
-        local pivot = cart:GetPivot()
-        teleportPlayer(pivot * CFrame.new(0, 6, 0))
-    end
-end })
-
-local tpLocations = {
-    {"Castle 1", Vector3.new(44.00, 3.52, -39978.82)}, {"Castle 2", Vector3.new(33.43, 3.00, -29972.26)},
-    {"Castle 3", Vector3.new(41.05, 3.50, -19973.70)}, {"Castle 4", Vector3.new(41.75, 3.50, -9980.53)},
-    {"Castle 5", Vector3.new(39.04, 3.56, 23.96)}, {"Castle 6", Vector3.new(41.47, 3.50, 10020.76)},
-    {"Castle 7", Vector3.new(39.80, 3.50, 20024.25)}, {"Castle 8", Vector3.new(37.93, 3.59, 30015.68)},
-    {"Castle 9", Vector3.new(39.13, 3.56, 40019.69)}, {"Final Castle", Vector3.new(7.80, 3.00, 46854.27)}
-}
-for _, loc in ipairs(tpLocations) do
-    Tabs.Teleport:AddButton({ Title = loc[1], Callback = function() teleportPlayer(CFrame.new(loc[2])) end })
-end
-
-local bossLocations = {
-    {"Thief King", Vector3.new(81.00, 11.51, -18039.25)},
-    {"Master Samurai", Vector3.new(103.27, 40.89, -3560.05)}, {"Elder Vampire", Vector3.new(103.08, 37.85, 7407.76)},
-    {"Gnome", Vector3.new(37.76, 3.00, 13993.09)}, {"Steam Punk", Vector3.new(-15.31, 3.02, 27032.90)},
-    {"King Ice", Vector3.new(24.27, 3.00, 45907.91)}
-}
-Tabs.Teleport:AddSection("Boss Locations")
-for _, loc in ipairs(bossLocations) do
-    Tabs.Teleport:AddButton({ Title = loc[1], Callback = function() teleportPlayer(CFrame.new(loc[2])) end })
-end
-
 BringBurgerToggleObj = Tabs.Misc:AddToggle("BringBurgerToggle", {
     Title = "Bring Burger",
     Default = Config.BringBurger,
@@ -2274,12 +2001,24 @@ Tabs.Settings:AddKeybind("ToggleUIKeybind", {
     end
 })
 
+local function getDashKey()
+    local k = Config.DashKeybind or "Q"
+    if typeof(k) == "EnumItem" then return k end
+    local name = tostring(k):gsub("Enum%.KeyCode%.", "")
+    return Enum.KeyCode[name] or Enum.KeyCode.Q
+end
+
 Tabs.Settings:AddKeybind("DashKeybind", {
     Title = "Dash Keybind",
     Mode = "Toggle",
-    Default = Config.DashKeybind,
+    Default = Config.DashKeybind or "Q",
+    Callback = function()
+        if performDash then
+            performDash()
+        end
+    end,
     ChangedCallback = function(NewKey)
-        local keyCode = typeof(NewKey) == "EnumItem" and NewKey or Enum.KeyCode[tostring(NewKey)]
+        local keyCode = typeof(NewKey) == "EnumItem" and NewKey or Enum.KeyCode[tostring(NewKey):gsub("Enum%.KeyCode%.", "")]
         if keyCode then
             Config.DashKeybind = keyCode.Name
             SaveConfig()
@@ -2288,11 +2027,14 @@ Tabs.Settings:AddKeybind("DashKeybind", {
 })
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    local boundKey = Enum.KeyCode[Config.DashKeybind]
-    if boundKey and input.KeyCode == boundKey then
-        performDash()
+    if UserInputService:GetFocusedTextBox() then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local targetKey = getDashKey()
+        if input.KeyCode == targetKey then
+            if performDash then
+                performDash()
+            end
+        end
     end
 end)
 
@@ -2386,13 +2128,17 @@ local lastDash = 0
 
 performDash = function()
     local now = tick()
-    if now - lastDash < 0.5 then return end
+    if now - lastDash < 0.25 then return end
     lastDash = now
 
-    setFloatStrokeActive(dashFloatStroke, true)
-    task.delay(0.15, function()
-        setFloatStrokeActive(dashFloatStroke, false)
-    end)
+    if dashFloatStroke then
+        setFloatStrokeActive(dashFloatStroke, true)
+        task.delay(0.15, function()
+            if dashFloatStroke then
+                setFloatStrokeActive(dashFloatStroke, false)
+            end
+        end)
+    end
 
     local c = LocalPlayer.Character
     if not c then return end
@@ -2400,14 +2146,21 @@ performDash = function()
     local hum = c:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    local dir = Camera.CFrame.LookVector
-    dir = Vector3.new(dir.X, 0, dir.Z).Unit
+    local look = Camera.CFrame.LookVector
+    local flat = Vector3.new(look.X, 0, look.Z)
+    local dir = flat.Magnitude > 0.01 and flat.Unit or hrp.CFrame.LookVector
+    local power = tonumber(Config.DashPower) or 80
 
     local bv = Instance.new("BodyVelocity")
-    bv.Velocity = dir * Config.DashPower
-    bv.MaxForce = Vector3.new(1e5, 0, 1e5)
-    bv.P = 1e5
+    bv.Velocity = dir * power
+    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bv.P = 9e9
     bv.Parent = hrp
+
+    pcall(function()
+        hrp.AssemblyLinearVelocity = dir * power
+        hrp.Velocity = dir * power
+    end)
 
     task.delay(0.15, function()
         if bv and bv.Parent then bv:Destroy() end
@@ -2506,49 +2259,6 @@ Tabs.AirWeld:AddToggle("AirWeldToggle", {
     end
 })
 
-Tabs.AutoFarm:AddToggle("AutoFarmToggle", {
-    Title = "Auto Farm",
-    Default = Config.AutoFarmEnabled,
-    Callback = function(Value)
-        Config.AutoFarmEnabled = Value
-        if Value then
-            Config.FastAttackEnabled = true
-            Config.FastAttackMultiplier = 200
-            Config.KillAuraEnabled = true
-            Config.KillAuraDistance = 500
-            Config.BringBurger = true
-            if FastAttackToggleObj then FastAttackToggleObj:SetValue(true) end
-            if FastAttackSliderObj then FastAttackSliderObj:SetValue(200) end
-            if KillAuraToggleObj then KillAuraToggleObj:SetValue(true) end
-            if KillAuraSliderObj then KillAuraSliderObj:SetValue(500) end
-            if BringBurgerToggleObj then BringBurgerToggleObj:SetValue(true) end
-            startAutoClick()
-            if uiVisible then task.wait(0.2) toggleUI() end
-        else
-            stopAutoClick()
-        end
-        SaveConfig()
-    end
-})
-
-Tabs.AutoFarm:AddParagraph({
-    Title = "Auto Reset Note",
-    Content = "Set the interval in minutes The character will automatically reset every X minutes to prevent getting stuck."
-})
-
-Tabs.AutoFarm:AddInput("AutoResetInput", {
-    Title = " Auto Reset ",
-    Default = tostring(Config.AutoResetMinutes),
-    Numeric = true,
-    Finished = true,
-    Callback = function(Value)
-        local num = tonumber(Value)
-        if num and num > 0 then
-            Config.AutoResetMinutes = num
-            SaveConfig()
-        end
-    end
-})
 
 local isHealing = false
 local function checkAndHeal(humanoid, char)
