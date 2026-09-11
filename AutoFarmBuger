@@ -232,10 +232,33 @@ end)
 local targetItems = { ["Burger"] = true, ["GoldenBurger"] = true, ["DiamondBurger"] = true }
 local itemQueue = {}
 local currentTarget = nil
-local processTimer = 0
+local collectTimer = 0
+
+local function isItemEquipped(obj)
+    local ancestor = obj.Parent
+    while ancestor and ancestor ~= workspace do
+        if ancestor:IsA("Model") and ancestor:FindFirstChildOfClass("Humanoid") then
+            return true
+        end
+        ancestor = ancestor.Parent
+    end
+    return false
+end
+
+local function isValidBurger(obj)
+    if not (obj and obj.Parent and targetItems[obj.Name]) then return false end
+    if obj:FindFirstAncestor("Spawners") or obj:FindFirstAncestor("Spawner") then return false end
+    if obj:FindFirstAncestor("FloatingCastle") then return false end
+    local map = workspace:FindFirstChild("Map")
+    if map and obj:IsDescendantOf(map) then return false end
+    if isItemEquipped(obj) then return false end
+    local p = obj.Parent
+    if p and string.find(string.lower(p.Name), "spawn") then return false end
+    return true
+end
 
 local function addToQueue(obj)
-    if targetItems[obj.Name] then
+    if isValidBurger(obj) then
         for _, v in ipairs(itemQueue) do if v == obj then return end end
         table.insert(itemQueue, obj)
     end
@@ -244,35 +267,65 @@ end
 for _, obj in ipairs(workspace:GetDescendants()) do addToQueue(obj) end
 workspace.DescendantAdded:Connect(addToQueue)
 
+task.spawn(function()
+    while task.wait(1.5) do
+        for _, obj in ipairs(workspace:GetChildren()) do
+            if targetItems[obj.Name] then addToQueue(obj) end
+        end
+        local m = workspace:FindFirstChild("Models")
+        if m then
+            for _, obj in ipairs(m:GetChildren()) do
+                if targetItems[obj.Name] then addToQueue(obj) end
+            end
+        end
+    end
+end)
+
 RunService.RenderStepped:Connect(function(deltaTime)
     if not Config.BringBurger then return end
 
-    if not targetItems[currentTarget and currentTarget.Name or ""] or not currentTarget.Parent then
-        if #itemQueue > 0 then
-            currentTarget = table.remove(itemQueue, 1)
-            processTimer = 0
+    local targetCFrame = Camera.CFrame * CFrame.new(0, 0, -2.5)
+    local camPos = Camera.CFrame.Position
+    local hasBurgersNearby = false
+
+    for i = #itemQueue, 1, -1 do
+        local item = itemQueue[i]
+        if not isValidBurger(item) then
+            table.remove(itemQueue, i)
         else
-            currentTarget = nil
+            local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or (item:IsA("BasePart") and item)
+            if targetPart and (camPos - targetPart.Position).Magnitude <= 1000 then
+                hasBurgersNearby = true
+                if item:IsA("Model") then
+                    item:PivotTo(targetCFrame)
+                    for _, p in ipairs(item:GetChildren()) do
+                        if p:IsA("BasePart") then
+                            p.CanCollide = false
+                            p.AssemblyLinearVelocity = Vector3.zero
+                            p.AssemblyAngularVelocity = Vector3.zero
+                        end
+                    end
+                elseif item:IsA("BasePart") then
+                    item.CFrame = targetCFrame
+                    item.CanCollide = false
+                    item.AssemblyLinearVelocity = Vector3.zero
+                    item.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
         end
     end
 
-    if currentTarget then
-        local targetCFrame = Camera.CFrame * CFrame.new(0, 0, -2.5)
-
-        if currentTarget:IsA("Model") then
-            currentTarget:PivotTo(targetCFrame)
-        elseif currentTarget:IsA("BasePart") then
-            currentTarget.CFrame = targetCFrame
+    if hasBurgersNearby then
+        collectTimer = collectTimer + deltaTime
+        if collectTimer >= 0.05 then
+            collectTimer = 0
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+            end)
         end
-
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-
-        processTimer = processTimer + deltaTime
-        if processTimer > 0.2 then
-            currentTarget = nil
-            processTimer = 0
-        end
+    else
+        collectTimer = 0
     end
 end)
 
@@ -327,12 +380,10 @@ local bosses = {
     { n = "kingice", pos = CFrame.new(24.27, 3.00, 45907.91) },
 }
 
-local skyIslandPos = CFrame.new(-46.56, 81.52, 37536.83)
 local currentIdx = 1
 local hoverPos = nil
 local visited = false
 local engaged = false
-local visitedSkyIsland = false
 local autoFarmStartTime = tick()
 
 RunService.Heartbeat:Connect(function()
@@ -427,7 +478,6 @@ task.spawn(function()
             hoverPos = nil
             visited = false
             engaged = false
-            visitedSkyIsland = false
             currentIdx = 1
             autoFarmStartTime = tick()
             continue
@@ -437,7 +487,6 @@ task.spawn(function()
             hoverPos = nil
             visited = false
             engaged = false
-            visitedSkyIsland = false
             currentIdx = 1
             task.wait(1)
             continue
@@ -491,31 +540,16 @@ task.spawn(function()
                 end
             end
         else
-            if not visitedSkyIsland then
-                hoverPos = nil
-                hrp.CFrame = skyIslandPos
-                hrp.Anchored = true
-                task.wait(2)
-                hrp.Anchored = false
-                visitedSkyIsland = true
-                hoverPos = skyIslandPos
-            end
-
-            if #itemQueue == 0 and currentTarget == nil then
-                task.wait(3)
-                if #itemQueue == 0 and currentTarget == nil then
-                    hoverPos = nil
-                    visitedSkyIsland = false
-                    currentIdx = 1
-                    autoFarmStartTime = tick()
-                    task.spawn(function()
-                        pcall(function()
-                            local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
-                            Remotes.Reset.fireServer()
-                        end)
-                    end)
-                end
-            end
+            hoverPos = nil
+            currentIdx = 1
+            autoFarmStartTime = tick()
+            task.spawn(function()
+                pcall(function()
+                    local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
+                    Remotes.Reset.fireServer()
+                end)
+            end)
+            task.wait(3)
         end
     end
 end)
