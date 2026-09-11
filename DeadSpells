@@ -33,7 +33,9 @@ local Config = {
     FastAttackMultiplier = 10,
     BringBurger = false,
     BringMana = false,
+    BringGreaterMana = false,
     BringHeal = false,
+    BringGreaterHeal = false,
     BringPotionDistance = 6,
     AutoBringMobs = false,
     BringMobRange = 100,
@@ -1053,8 +1055,20 @@ local function buildBurgerESP(obj)
     end
 end
 
+local function isValidBurger(obj)
+    if not (obj and obj.Parent and targetItems[obj.Name]) then return false end
+    if obj:FindFirstAncestor("Spawners") or obj:FindFirstAncestor("Spawner") then return false end
+    if obj:FindFirstAncestor("FloatingCastle") then return false end
+    local map = workspace:FindFirstChild("Map")
+    if map and obj:IsDescendantOf(map) then return false end
+    if isItemEquipped(obj) then return false end
+    local p = obj.Parent
+    if p and string.find(string.lower(p.Name), "spawn") then return false end
+    return true
+end
+
 local function setupBurgerESP(obj)
-    if not targetItems[obj.Name] then return end
+    if not isValidBurger(obj) then return end
     local found = false
     for _, v in ipairs(activeBurgers) do
         if v == obj then found = true break end
@@ -1064,7 +1078,7 @@ local function setupBurgerESP(obj)
 end
 
 local function addToQueue(obj)
-    if targetItems[obj.Name] then
+    if isValidBurger(obj) then
         for _, v in ipairs(itemQueue) do if v == obj then return end end
         table.insert(itemQueue, obj)
         setupBurgerESP(obj)
@@ -1077,7 +1091,9 @@ workspace.DescendantAdded:Connect(addToQueue)
 local function updateBurgerESP()
     for i = #activeBurgers, 1, -1 do
         local obj = activeBurgers[i]
-        if not obj or not obj.Parent then
+        if not isValidBurger(obj) then
+            local espFolder = obj and obj:FindFirstChild("StarCrowBurgerESP")
+            if espFolder then espFolder:Destroy() end
             table.remove(activeBurgers, i)
         else
             local espFolder = obj:FindFirstChild("StarCrowBurgerESP")
@@ -1110,14 +1126,14 @@ local function isValidPotion(obj)
 end
 
 local function isManaPotion(obj)
-    if not (obj and obj:IsA("Model") and obj.Name == "ManaPotion") then return false end
+    if not (obj and obj:IsA("Model") and (obj.Name == "ManaPotion" or obj.Name == "GreaterManaPotion")) then return false end
     if not obj:FindFirstChildOfClass("Configuration") then return false end
     local modelsFolder = workspace:FindFirstChild("Models")
     return modelsFolder and obj:IsDescendantOf(modelsFolder)
 end
 
 local function isHealPotion(obj)
-    if not (obj and obj:IsA("Model") and obj.Name == "HealingPotion") then return false end
+    if not (obj and obj:IsA("Model") and (obj.Name == "HealingPotion" or obj.Name == "GreaterHealthPotion")) then return false end
     if not obj:FindFirstChildOfClass("Configuration") then return false end
     local modelsFolder = workspace:FindFirstChild("Models")
     return modelsFolder and obj:IsDescendantOf(modelsFolder)
@@ -1146,42 +1162,60 @@ workspace.DescendantAdded:Connect(function(obj)
     addToHealQueue(obj)
 end)
 
+local scanBurgerTimer = 0
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        local dt = task.wait(0.1)
         updateBurgerESP()
         updateNPCESP()
+        scanBurgerTimer = scanBurgerTimer + dt
+        if scanBurgerTimer >= 1.5 then
+            scanBurgerTimer = 0
+            for _, obj in ipairs(workspace:GetChildren()) do
+                if targetItems[obj.Name] then addToQueue(obj) end
+            end
+            local m = workspace:FindFirstChild("Models")
+            if m then
+                for _, obj in ipairs(m:GetChildren()) do
+                    if targetItems[obj.Name] then addToQueue(obj) end
+                end
+            end
+        end
     end
 end)
 
-RunService.RenderStepped:Connect(function(deltaTime)
-    if not Config.BringBurger then return end
-
-    if not targetItems[currentTarget and currentTarget.Name or ""] or not currentTarget.Parent then
-        if #itemQueue > 0 then
-            currentTarget = table.remove(itemQueue, 1)
-            processTimer = 0
-        else
-            currentTarget = nil
-        end
+RunService.RenderStepped:Connect(function()
+    if not Config.BringBurger then
+        return
     end
 
-    if currentTarget then
-        local targetCFrame = Camera.CFrame * CFrame.new(0, 0, -2.5)
+    local dist = Config.BringPotionDistance or 6
+    local targetCFrame = Camera.CFrame * CFrame.new(0, 0, -dist)
+    local camPos = Camera.CFrame.Position
 
-        if currentTarget:IsA("Model") then
-            currentTarget:PivotTo(targetCFrame)
-        elseif currentTarget:IsA("BasePart") then
-            currentTarget.CFrame = targetCFrame
-        end
-
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-
-        processTimer = processTimer + deltaTime
-        if processTimer > 0.2 then
-            currentTarget = nil
-            processTimer = 0
+    for i = #itemQueue, 1, -1 do
+        local item = itemQueue[i]
+        if not isValidBurger(item) then
+            table.remove(itemQueue, i)
+        else
+            local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or (item:IsA("BasePart") and item)
+            if targetPart and (camPos - targetPart.Position).Magnitude <= 1000 then
+                if item:IsA("Model") then
+                    item:PivotTo(targetCFrame)
+                    for _, p in ipairs(item:GetChildren()) do
+                        if p:IsA("BasePart") then
+                            p.CanCollide = false
+                            p.AssemblyLinearVelocity = Vector3.zero
+                            p.AssemblyAngularVelocity = Vector3.zero
+                        end
+                    end
+                elseif item:IsA("BasePart") then
+                    item.CFrame = targetCFrame
+                    item.CanCollide = false
+                    item.AssemblyLinearVelocity = Vector3.zero
+                    item.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
         end
     end
 end)
@@ -1939,6 +1973,15 @@ Tabs.Misc:AddToggle("BringManaToggle", {
     end
 })
 
+Tabs.Misc:AddToggle("BringGreaterManaToggle", {
+    Title = "Bring Greater Mana Potion",
+    Default = Config.BringGreaterMana,
+    Callback = function(Value)
+        Config.BringGreaterMana = Value
+        SaveConfig()
+    end
+})
+
 Tabs.Misc:AddToggle("BringHealToggle", {
     Title = "Bring Heal Potion",
     Default = Config.BringHeal,
@@ -1948,8 +1991,17 @@ Tabs.Misc:AddToggle("BringHealToggle", {
     end
 })
 
-Tabs.Misc:AddSlider("BringPotionDistanceSlider", {
-    Title = "Potion Distance",
+Tabs.Misc:AddToggle("BringGreaterHealToggle", {
+    Title = "Bring Greater Heal Potion",
+    Default = Config.BringGreaterHeal,
+    Callback = function(Value)
+        Config.BringGreaterHeal = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Misc:AddSlider("BringDistanceSlider", {
+    Title = "Bring Distance",
     Default = Config.BringPotionDistance or 6,
     Min = 3,
     Max = 15,
@@ -1970,7 +2022,7 @@ Tabs.Misc:AddToggle("AutoMineToggle", {
 })
 
 Tabs.Misc:AddToggle("NoFogToggle", {
-    Title = "Loop No Fog",
+    Title = "No Fog",
     Default = Config.NoFogEnabled,
     Callback = function(Value)
         Config.NoFogEnabled = Value
@@ -1979,7 +2031,7 @@ Tabs.Misc:AddToggle("NoFogToggle", {
 })
 
 Tabs.Misc:AddToggle("FullBrightToggle", {
-    Title = "Loop Full Bright",
+    Title = "Full Bright",
     Default = Config.FullBrightEnabled,
     Callback = function(Value)
         Config.FullBrightEnabled = Value
