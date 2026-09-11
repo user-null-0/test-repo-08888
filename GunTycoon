@@ -9,8 +9,10 @@ local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local INVIS_CONFIG = { INVISIBILITY_POSITION = Vector3.new(-25.95, 84, 3537.55) }
 local InvisState = { isInvisible = false }
+local setFloatStrokeActive
+local SC_invisFloatStroke
+local fakeCharacter = nil
 
 local Config = {
     SilentAim = false, FOV = 90, AimPart = "Head", TeamCheck = false, FriendCheck = false,
@@ -19,7 +21,7 @@ local Config = {
     LoopSpeedEnabled = false, WalkSpeed = 30, InfJumpEnabled = false, NoclipEnabled = false,
     FlyEnabled = false, FlySpeed = 5, FloatBtnSize = 46,
     NoclipFloatEnabled = false, FlyFloatEnabled = false, InvisFloatEnabled = false,
-    UITheme = "Dark",
+    UITheme = "Amethyst",
     FlyKey = "F", NoclipKey = "J", InvisKey = "C"
 }
 
@@ -45,79 +47,275 @@ local function LoadConfig()
 end
 LoadConfig()
 
-local function setCharacterTransparency(character, transparency)
-    if not character then return end
-    for _, d in character:GetDescendants() do
-        if d:FindFirstAncestorOfClass("Accessory") then continue end
-        if d:IsA("BasePart") then
-            if d.Name == "HumanoidRootPart" then
-                d.Transparency = 1
-            elseif d.Name == "Head" then
-                d.Transparency = 0
-            else
-                d.Transparency = transparency
+local INVIS_Y_OFFSET = 1000
+local invisPlatform = nil
+local invisMotor6DMap = {}
+local invisHeartbeatConn = nil
+local invisSteppedConn = nil
+local invisJumpConn = nil
+
+local function createFakeCharacter(realChar)
+    local ok, clone = pcall(function()
+        realChar.Archivable = true
+        local c = realChar:Clone()
+        realChar.Archivable = false
+        return c
+    end)
+    if not ok or not clone then return nil end
+
+    for _, descendant in ipairs(clone:GetDescendants()) do
+        if descendant:IsA("Script") or descendant:IsA("LocalScript") or descendant:IsA("Sound") or descendant:IsA("Highlight") then
+            descendant:Destroy()
+        elseif descendant:IsA("BasePart") or descendant:IsA("Decal") then
+            if descendant:IsA("BasePart") then
+                descendant.Anchored = false
             end
-        elseif d:IsA("Decal") and d.Name == "face" and d.Parent and d.Parent.Name == "Head" then
-            d.Transparency = 0
-        elseif d:IsA("Decal") then
-            d.Transparency = transparency
+            local realPart = realChar:FindFirstChild(descendant.Name, true)
+            if descendant.Name == "HumanoidRootPart" or (realPart and realPart:IsA("BasePart") and realPart.Transparency >= 0.99) then
+                descendant.Transparency = 1
+            else
+                descendant.Transparency = 0.5
+            end
+        end
+    end
+
+    invisMotor6DMap = {}
+    for _, descendant in ipairs(realChar:GetDescendants()) do
+        if descendant:IsA("Motor6D") then
+            local current = descendant
+            local path = {}
+            while current and current ~= realChar do
+                table.insert(path, 1, current.Name)
+                current = current.Parent
+            end
+            local cloneCurrent = clone
+            for _, name in ipairs(path) do
+                cloneCurrent = cloneCurrent and cloneCurrent:FindFirstChild(name)
+            end
+            if cloneCurrent and cloneCurrent:IsA("Motor6D") then
+                invisMotor6DMap[descendant] = cloneCurrent
+            end
+        end
+    end
+
+    clone.Parent = workspace
+    return clone
+end
+
+local function disableInvisibility()
+    if invisHeartbeatConn then
+        invisHeartbeatConn:Disconnect()
+        invisHeartbeatConn = nil
+    end
+    if invisSteppedConn then
+        invisSteppedConn:Disconnect()
+        invisSteppedConn = nil
+    end
+    if invisJumpConn then
+        invisJumpConn:Disconnect()
+        invisJumpConn = nil
+    end
+
+    local character = LocalPlayer.Character
+    if character then
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local fakeHRP = fakeCharacter and fakeCharacter:FindFirstChild("HumanoidRootPart")
+        local returnCFrame = fakeHRP and fakeHRP.CFrame
+
+        if fakeCharacter then
+            fakeCharacter:Destroy()
+            fakeCharacter = nil
+        end
+
+        if humanoidRootPart and returnCFrame then
+            humanoidRootPart.CFrame = returnCFrame
+            humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+
+        local cam = workspace.CurrentCamera
+        if cam and humanoid then
+            cam.CameraSubject = humanoid
+        end
+    end
+
+    if invisPlatform then
+        invisPlatform:Destroy()
+        invisPlatform = nil
+    end
+
+    invisMotor6DMap = {}
+    InvisState.isInvisible = false
+    if SC_invisFloatStroke and setFloatStrokeActive then
+        setFloatStrokeActive(SC_invisFloatStroke, false)
+    end
+    pcall(function()
+        if Fluent and Fluent.Options and Fluent.Options["InvisibleToggle"] then
+            Fluent.Options["InvisibleToggle"]:SetValue(false)
+        end
+    end)
+end
+
+local function enableInvisibility()
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoidRootPart or not humanoid then return end
+
+    local hipHeightOffset = (humanoid.RigType ~= Enum.HumanoidRigType.R6) and (humanoid.HipHeight + humanoidRootPart.Size.Y / 2) or 3
+    local originalPos = humanoidRootPart.Position
+    local groundY = originalPos.Y - hipHeightOffset
+
+    fakeCharacter = createFakeCharacter(character)
+    if not fakeCharacter then return end
+
+    local fakeHRP = fakeCharacter:FindFirstChild("HumanoidRootPart")
+    local fakeHumanoid = fakeCharacter:FindFirstChildOfClass("Humanoid")
+    if not fakeHRP or not fakeHumanoid then
+        if fakeCharacter then fakeCharacter:Destroy() fakeCharacter = nil end
+        return
+    end
+
+    invisPlatform = Instance.new("Part")
+    invisPlatform.Name = "InvisPlatform"
+    invisPlatform.Size = Vector3.new(12, 1, 12)
+    invisPlatform.Anchored = true
+    invisPlatform.CanCollide = true
+    invisPlatform.Transparency = 1
+    invisPlatform.CastShadow = false
+    invisPlatform.Parent = workspace
+    invisPlatform.CFrame = CFrame.new(originalPos.X, groundY + INVIS_Y_OFFSET - 0.5, originalPos.Z)
+
+    fakeHumanoid.WalkSpeed = humanoid.WalkSpeed
+    fakeHumanoid.JumpPower = humanoid.JumpPower
+    fakeHumanoid.JumpHeight = humanoid.JumpHeight
+    fakeHumanoid.UseJumpPower = humanoid.UseJumpPower
+
+    local cam = workspace.CurrentCamera
+    if cam then
+        cam.CameraSubject = fakeHumanoid
+    end
+
+    humanoidRootPart.CFrame = humanoidRootPart.CFrame + Vector3.new(0, INVIS_Y_OFFSET, 0)
+    humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    invisSteppedConn = RunService.Stepped:Connect(function()
+        if fakeCharacter and character then
+            for realMotor, fakeMotor in pairs(invisMotor6DMap) do
+                if realMotor and realMotor.Parent and realMotor.Parent.Parent then
+                    fakeMotor.Transform = realMotor.Transform
+                end
+            end
+        end
+    end)
+
+    invisJumpConn = UserInputService.JumpRequest:Connect(function()
+        if fakeHumanoid then
+            fakeHumanoid.Jump = true
+        end
+    end)
+
+    invisHeartbeatConn = RunService.Heartbeat:Connect(function()
+        if not character or not character.Parent or humanoid.Health <= 0 then
+            if InvisState.isInvisible then
+                disableInvisibility()
+            end
+            return
+        end
+
+        if humanoidRootPart and fakeCharacter and fakeCharacter.Parent and fakeHRP and fakeHRP.Parent and fakeHumanoid and invisPlatform then
+            local state = fakeHumanoid:GetState()
+            if (state == Enum.HumanoidStateType.Climbing or state == Enum.HumanoidStateType.Swimming or state == Enum.HumanoidStateType.Seated) and state ~= humanoid:GetState() then
+                humanoid:ChangeState(state)
+            end
+
+            local moveDirection = humanoid.MoveDirection
+            if state == Enum.HumanoidStateType.Climbing then
+                if cam then
+                    local lookVector = cam.CFrame.LookVector
+                    local unit = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
+                    local dot = humanoid.MoveDirection:Dot(unit)
+                    if dot > 0.1 then
+                        moveDirection = Vector3.new(0, 1, 0)
+                    elseif dot < -0.1 then
+                        moveDirection = Vector3.new(0, -1, 0)
+                    else
+                        moveDirection = Vector3.new(0, 0, 0)
+                    end
+                end
+            elseif state == Enum.HumanoidStateType.Swimming then
+                local jumpY = (UserInputService:IsKeyDown(Enum.KeyCode.Space) or humanoid.Jump) and 1 or 0
+                moveDirection = Vector3.new(moveDirection.X, jumpY, moveDirection.Z)
+            end
+
+            fakeHumanoid:Move(moveDirection, false)
+            fakeHumanoid.Jump = humanoid.Jump
+            fakeHumanoid.WalkSpeed = humanoid.WalkSpeed
+            fakeHumanoid.JumpPower = humanoid.JumpPower
+            fakeHumanoid.JumpHeight = humanoid.JumpHeight
+            fakeHumanoid.UseJumpPower = humanoid.UseJumpPower
+
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+            raycastParams.FilterDescendantsInstances = {character, invisPlatform, fakeCharacter}
+
+            local raycastResult = workspace:Raycast(fakeHRP.Position, Vector3.new(0, -500, 0), raycastParams)
+            if raycastResult then
+                groundY = raycastResult.Position.Y
+            else
+                groundY = fakeHRP.Position.Y - hipHeightOffset
+            end
+
+            humanoidRootPart.CFrame = fakeHRP.CFrame + Vector3.new(0, INVIS_Y_OFFSET, 0)
+            humanoidRootPart.AssemblyLinearVelocity = fakeHRP.AssemblyLinearVelocity
+            humanoidRootPart.AssemblyAngularVelocity = fakeHRP.AssemblyAngularVelocity
+            invisPlatform.CFrame = CFrame.new(humanoidRootPart.Position.X, groundY + INVIS_Y_OFFSET - 0.5, humanoidRootPart.Position.Z)
+
+            if humanoidRootPart.Position.Y < groundY + INVIS_Y_OFFSET - 15 then
+                humanoidRootPart.CFrame = CFrame.new(humanoidRootPart.Position.X, groundY + INVIS_Y_OFFSET + hipHeightOffset + 2, humanoidRootPart.Position.Z)
+                humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+
+    InvisState.isInvisible = true
+    if SC_invisFloatStroke and setFloatStrokeActive then
+        setFloatStrokeActive(SC_invisFloatStroke, true)
+    end
+    pcall(function()
+        if Fluent and Fluent.Options and Fluent.Options["InvisibleToggle"] then
+            Fluent.Options["InvisibleToggle"]:SetValue(true)
+        end
+    end)
+end
+
+local function toggleInvisibility(state)
+    if state == nil then
+        state = not InvisState.isInvisible
+    end
+    if state then
+        if not InvisState.isInvisible then
+            enableInvisibility()
+        end
+    else
+        if InvisState.isInvisible then
+            disableInvisibility()
         end
     end
 end
 
-local function toggleInvisibility(state)
-    local char = LocalPlayer.Character
-    if not char then return end
-    if InvisState.isInvisible == state then return end
-    InvisState.isInvisible = state
-
+LocalPlayer.CharacterAdded:Connect(function(character)
+    local humanoid = character:WaitForChild("Humanoid", 5)
     local cam = workspace.CurrentCamera
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-
-    if InvisState.isInvisible then
-        if not hrp then return end
-        local savedCFrame = hrp.CFrame
-        local savedCamCFrame = cam.CFrame
-
-        cam.CameraType = Enum.CameraType.Scriptable
-        cam.CFrame = savedCamCFrame
-        char:MoveTo(INVIS_CONFIG.INVISIBILITY_POSITION)
-        task.wait(0.1)
-
-        local seat = Instance.new("Seat")
-        seat.Name = "invischair"
-        seat.Anchored = false
-        seat.CanCollide = false
-        seat.Transparency = 1
-        seat.Size = Vector3.new(2, 0.5, 2)
-        seat.Position = INVIS_CONFIG.INVISIBILITY_POSITION
-        seat.Parent = workspace
-
-        local weld = Instance.new("Weld")
-        weld.Part0 = seat
-        weld.Part1 = hrp
-        weld.Parent = seat
-
-        task.wait()
-        task.defer(function()
-            if seat and seat.Parent then seat.CFrame = savedCFrame end
-        end)
-
-        cam.CameraType = Enum.CameraType.Custom
-        if humanoid then cam.CameraSubject = humanoid end
-
-        setCharacterTransparency(char, 0.5)
-        hrp.Transparency = 1
-    else
-        local chair = workspace:FindFirstChild("invischair")
-        if chair then chair:Destroy() end
-
-        setCharacterTransparency(char, 0)
-        if hrp then hrp.Transparency = 1 end
-        if humanoid then cam.CameraSubject = humanoid end
+    if cam and humanoid then
+        cam.CameraSubject = humanoid
     end
-end
+    if InvisState.isInvisible then
+        disableInvisibility()
+    end
+end)
 
 local LoopBring = { Enabled = false, Targets = {}, Connection = nil }
 
@@ -325,7 +523,7 @@ if not floatGui.Parent then floatGui.Parent = LocalPlayer:WaitForChild("PlayerGu
 
 local floatDragLocked = false
 
-local function setFloatStrokeActive(stroke, isActive)
+setFloatStrokeActive = function(stroke, isActive)
     if not stroke then return end
     local old = stroke:FindFirstChildOfClass("UIGradient")
     if old then old:Destroy() end
@@ -395,7 +593,7 @@ end
 
 local SC_noclipFloatBtn, SC_noclipFloatStroke
 local SC_flyFloatBtn, SC_flyFloatStroke
-local SC_invisFloatBtn, SC_invisFloatStroke
+local SC_invisFloatBtn
 
 local function resizeAllFloatBtns()
     local sz = Config.FloatBtnSize
@@ -682,6 +880,11 @@ RunService.Stepped:Connect(function()
             for _, part in ipairs(char:GetDescendants()) do
                 if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
             end
+            if fakeCharacter then
+                for _, part in ipairs(fakeCharacter:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+                end
+            end
         end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum and Config.LoopSpeedEnabled then hum.WalkSpeed = Config.WalkSpeed end
@@ -700,27 +903,15 @@ end)
 
 local Window = Fluent:CreateWindow({
     Title = "StarCrowHub", SubTitle = "Gun Tycoon", TabWidth = 130, Size = UDim2.fromOffset(460, 400),
-    Acrylic = false, Theme = "Dark", MinimizeKey = Enum.KeyCode.LeftControl
+    Acrylic = false, Theme = "Amethyst", MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 local Tabs = {
-    Info = Window:AddTab({ Title = "Info", Icon = "info" }),
     GunMod = Window:AddTab({ Title = "Gun Mod", Icon = "crosshair" }),
     ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
     Player = Window:AddTab({ Title = "Player", Icon = "user" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
-
-Tabs.Info:AddParagraph({ Title = "Join our Discord", Content = "Discord is the best place to get updates and report bugs." })
-Tabs.Info:AddButton({
-    Title = "Copy Discord Link",
-    Callback = function()
-        pcall(function()
-            setclipboard("https://discord.com/invite/wXthjUsXns")
-            Fluent:Notify({ Title = "Copied!", Content = "Discord link copied to clipboard.", Duration = 3 })
-        end)
-    end
-})
 
 Tabs.GunMod:AddToggle("SilentAimT", { Title = "Silent Aim", Default = Config.SilentAim, Callback = function(v) Config.SilentAim = v; SaveConfig() end })
 Tabs.GunMod:AddDropdown("AimPartD", { Title = "Aim Part", Values = {"Head", "Body"}, Default = (Config.AimPart == "HumanoidRootPart") and 2 or 1, Callback = function(v) Config.AimPart = (v == "Body") and "HumanoidRootPart" or "Head"; SaveConfig() end })
@@ -759,8 +950,7 @@ Tabs.Settings:AddKeybind("ToggleUIKeybind", { Title = "Minimize UI Keybind", Mod
 Tabs.Settings:AddKeybind("FlyKeybind", { Title = "Fly Keybind", Mode = "Toggle", Default = Config.FlyKey, ChangedCallback = function(NewKey) Config.FlyKey = NewKey; SaveConfig() end })
 Tabs.Settings:AddKeybind("NoclipKeybind", { Title = "Noclip Keybind", Mode = "Toggle", Default = Config.NoclipKey, ChangedCallback = function(NewKey) Config.NoclipKey = NewKey; SaveConfig() end })
 Tabs.Settings:AddKeybind("InvisKeybind", { Title = "Invisible Keybind", Mode = "Toggle", Default = Config.InvisKey, ChangedCallback = function(NewKey) Config.InvisKey = NewKey; SaveConfig() end })
-Tabs.Settings:AddDropdown("UITheme", { Title = "UI Theme", Values = { "Dark", "Darker", "Light", "Aqua", "Amethyst", "Rose", "Mint" }, Default = Config.UITheme or "Dark", Callback = function(Value) Config.UITheme = Value; SaveConfig(); Fluent:SetTheme(Value) end })
 Tabs.Settings:AddSlider("FloatBtnSizeSlider", { Title = "Float Size", Default = Config.FloatBtnSize, Min = 30, Max = 130, Rounding = 0, Callback = function(v) Config.FloatBtnSize = v; SaveConfig(); resizeAllFloatBtns() end })
 
 Window:SelectTab(1)
-if Config.UITheme and Config.UITheme ~= "Dark" then Fluent:SetTheme(Config.UITheme) end
+Fluent:SetTheme("Amethyst")
