@@ -1,5 +1,3 @@
-local teleport_func = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or getgenv().queue_on_teleport
-
 local currentResetMin = tonumber(getgenv and getgenv().AutoResetMinute) or tonumber(_G.AutoResetMinute)
 pcall(function()
     if isfile and isfile("BurgerResetTime.txt") then
@@ -12,20 +10,6 @@ end)
 if currentResetMin and writefile then
     pcall(function()
         writefile("BurgerResetTime.txt", tostring(currentResetMin))
-    end)
-end
-
-if teleport_func then
-    pcall(function()
-        local resetVal = currentResetMin or 3
-        teleport_func(string.format([[
-            repeat task.wait() until game:IsLoaded()
-            task.wait(1.5)
-            getgenv().AutoResetMinute = %s
-            pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/user-null-0/test-repo-08888/refs/heads/main/AutoFarmBuger"))()
-            end)
-        ]], tostring(resetVal)))
     end)
 end
 
@@ -615,7 +599,7 @@ InputContainer.Parent = MainFrame
 Instance.new("UICorner", InputContainer).CornerRadius = UDim.new(0, 6)
 
 local InputLabel = Instance.new("TextLabel")
-InputLabel.Size = UDim2.new(0.65, 0, 1, 0)
+InputLabel.Size = UDim2.new(0, 100, 1, 0)
 InputLabel.Position = UDim2.new(0, 8, 0, 0)
 InputLabel.BackgroundTransparency = 1
 InputLabel.Text = "Reset Minute"
@@ -625,18 +609,75 @@ InputLabel.TextSize = 11
 InputLabel.TextXAlignment = Enum.TextXAlignment.Left
 InputLabel.Parent = InputContainer
 
-local TimeDisplay = Instance.new("TextLabel")
-TimeDisplay.Size = UDim2.new(0.32, -8, 1, -6)
-TimeDisplay.Position = UDim2.new(0.68, 0, 0, 3)
-TimeDisplay.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-TimeDisplay.BorderSizePixel = 0
-TimeDisplay.Text = tostring(Config.AutoResetMinutes)
-TimeDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
-TimeDisplay.Font = Enum.Font.GothamBold
-TimeDisplay.TextSize = 11
-TimeDisplay.Parent = InputContainer
+local MinusBtn = Instance.new("TextButton")
+MinusBtn.Size = UDim2.new(0, 24, 0, 20)
+MinusBtn.Position = UDim2.new(1, -98, 0, 3)
+MinusBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+MinusBtn.BorderSizePixel = 0
+MinusBtn.Text = "-"
+MinusBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+MinusBtn.Font = Enum.Font.GothamBold
+MinusBtn.TextSize = 14
+MinusBtn.AutoButtonColor = true
+MinusBtn.Parent = InputContainer
+Instance.new("UICorner", MinusBtn).CornerRadius = UDim.new(0, 4)
 
-Instance.new("UICorner", TimeDisplay).CornerRadius = UDim.new(0, 4)
+local TimeBox = Instance.new("TextBox")
+TimeBox.Size = UDim2.new(0, 40, 0, 20)
+TimeBox.Position = UDim2.new(1, -70, 0, 3)
+TimeBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+TimeBox.BorderSizePixel = 0
+TimeBox.Text = tostring(Config.AutoResetMinutes)
+TimeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TimeBox.Font = Enum.Font.GothamBold
+TimeBox.TextSize = 11
+TimeBox.ClearTextOnFocus = false
+TimeBox.Parent = InputContainer
+Instance.new("UICorner", TimeBox).CornerRadius = UDim.new(0, 4)
+
+local PlusBtn = Instance.new("TextButton")
+PlusBtn.Size = UDim2.new(0, 24, 0, 20)
+PlusBtn.Position = UDim2.new(1, -26, 0, 3)
+PlusBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+PlusBtn.BorderSizePixel = 0
+PlusBtn.Text = "+"
+PlusBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+PlusBtn.Font = Enum.Font.GothamBold
+PlusBtn.TextSize = 14
+PlusBtn.AutoButtonColor = true
+PlusBtn.Parent = InputContainer
+Instance.new("UICorner", PlusBtn).CornerRadius = UDim.new(0, 4)
+
+local function updateResetTime(newVal)
+    local val = tonumber(newVal)
+    if val and val > 0 then
+        Config.AutoResetMinutes = math.floor(val)
+        TimeBox.Text = tostring(Config.AutoResetMinutes)
+        if getgenv then getgenv().AutoResetMinute = Config.AutoResetMinutes end
+        _G.AutoResetMinute = Config.AutoResetMinutes
+        if writefile then
+            pcall(function()
+                writefile("BurgerResetTime.txt", tostring(Config.AutoResetMinutes))
+            end)
+        end
+    else
+        TimeBox.Text = tostring(Config.AutoResetMinutes)
+    end
+end
+
+TimeBox.FocusLost:Connect(function()
+    updateResetTime(TimeBox.Text)
+end)
+
+MinusBtn.MouseButton1Click:Connect(function()
+    if Config.AutoResetMinutes > 1 then
+        updateResetTime(Config.AutoResetMinutes - 1)
+    end
+end)
+
+PlusBtn.MouseButton1Click:Connect(function()
+    updateResetTime(Config.AutoResetMinutes + 1)
+end)
 
 do
     local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
