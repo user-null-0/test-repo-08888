@@ -1,7 +1,27 @@
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+pcall(function()
+    if makefolder and isfolder and not isfolder("StarCrowHub") then
+        makefolder("StarCrowHub")
+    end
+end)
+
+local resetFile = "StarCrowHub/BurgerResetTime.txt"
+if isfile and not isfile(resetFile) and isfile("BurgerResetTime.txt") then
+    pcall(function()
+        local old = readfile("BurgerResetTime.txt")
+        if old and #old > 0 and writefile then
+            writefile(resetFile, old)
+        end
+    end)
+end
+
 local currentResetMin = tonumber(getgenv and getgenv().AutoResetMinute) or tonumber(_G.AutoResetMinute)
 pcall(function()
-    if isfile and isfile("BurgerResetTime.txt") then
-        local saved = tonumber(readfile("BurgerResetTime.txt"))
+    if isfile and isfile(resetFile) then
+        local saved = tonumber(readfile(resetFile))
         if saved and saved > 0 and not currentResetMin then
             currentResetMin = saved
         end
@@ -9,7 +29,7 @@ pcall(function()
 end)
 if currentResetMin and writefile then
     pcall(function()
-        writefile("BurgerResetTime.txt", tostring(currentResetMin))
+        writefile(resetFile, tostring(currentResetMin))
     end)
 end
 
@@ -657,7 +677,10 @@ local function updateResetTime(newVal)
         _G.AutoResetMinute = Config.AutoResetMinutes
         if writefile then
             pcall(function()
-                writefile("BurgerResetTime.txt", tostring(Config.AutoResetMinutes))
+                if makefolder and isfolder and not isfolder("StarCrowHub") then
+                    makefolder("StarCrowHub")
+                end
+                writefile(resetFile, tostring(Config.AutoResetMinutes))
             end)
         end
     else
