@@ -36,6 +36,7 @@ local Config = {
     BringGreaterMana = false,
     BringHeal = false,
     BringGreaterHeal = false,
+    BringSpeed = false,
     BringPotionDistance = 6,
     AutoBringMobs = false,
     BringMobRange = 100,
@@ -54,15 +55,16 @@ local Config = {
     DashFloatVisible = false,
     DashPower = 80,
     DashKeybind = "Q",
+    DashKeybindEnabled = true,
     BringItemRange = 100,
     ItemESPRarities = {
-        Common = false,
-        Uncommon = false,
-        Rare = false,
-        Epic = false,
-        Legendary = false,
-        Mythical = false,
-        Transcended = false,
+        Common = true,
+        Uncommon = true,
+        Rare = true,
+        Epic = true,
+        Legendary = true,
+        Mythical = true,
+        Transcended = true,
     },
     BringItemRarities = {
         Common = true,
@@ -849,6 +851,9 @@ local healQueue = {}
 local currentHealTarget = nil
 local healTimer = 0
 
+local speedQueue = {}
+local currentSpeedTarget = nil
+
 local activeItemESP = {}
 
 local function getItemColor(itemModel)
@@ -1153,13 +1158,28 @@ local function addToHealQueue(obj)
     end
 end
 
+local function isSpeedPotion(obj)
+    if not (obj and obj:IsA("Model") and (obj.Name == "SpeedPotion" or string.find(obj.Name, "SpeedPotion"))) then return false end
+    local modelsFolder = workspace:FindFirstChild("Models")
+    return modelsFolder and obj:IsDescendantOf(modelsFolder)
+end
+
+local function addToSpeedQueue(obj)
+    if isSpeedPotion(obj) then
+        for _, v in ipairs(speedQueue) do if v == obj then return end end
+        table.insert(speedQueue, obj)
+    end
+end
+
 for _, obj in ipairs(workspace:GetDescendants()) do
     addToManaQueue(obj)
     addToHealQueue(obj)
+    addToSpeedQueue(obj)
 end
 workspace.DescendantAdded:Connect(function(obj)
     addToManaQueue(obj)
     addToHealQueue(obj)
+    addToSpeedQueue(obj)
 end)
 
 local scanBurgerTimer = 0
@@ -1249,6 +1269,22 @@ RunService.RenderStepped:Connect(function()
     end
     if currentHealTarget then
         currentHealTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not Config.BringSpeed then
+        currentSpeedTarget = nil
+        return
+    end
+    if not isValidPotion(currentSpeedTarget) then
+        for i = #speedQueue, 1, -1 do
+            if not isValidPotion(speedQueue[i]) then table.remove(speedQueue, i) end
+        end
+        currentSpeedTarget = #speedQueue > 0 and table.remove(speedQueue, 1) or nil
+    end
+    if currentSpeedTarget then
+        currentSpeedTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
     end
 end)
 
@@ -1528,10 +1564,10 @@ local Window = Fluent:CreateWindow({
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-    ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
     Player = Window:AddTab({ Title = "Player", Icon = "user" }),
-    Misc = Window:AddTab({ Title = "Misc", Icon = "box" }),
-    AirWeld = Window:AddTab({ Title = "Interesting", Icon = "rbxassetid://6862780932" }),
+    Item = Window:AddTab({ Title = "Item", Icon = "package" }),
+    ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
+    Misc = Window:AddTab({ Title = "Misc", Icon = "wrench" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
@@ -1539,6 +1575,8 @@ local FastAttackToggleObj, FastAttackSliderObj, NPCHitboxToggleObj, NPCHitboxSli
 local KillAuraToggleObj, KillAuraSliderObj
 local BringBurgerToggleObj
 local performDash
+local dashFloatBtn
+local oldNamecall_aw = nil
 
 local MobCache = {}
 
@@ -1592,11 +1630,26 @@ end)
 
 Tabs.Main:AddSection("Combat")
 
-Tabs.Main:AddToggle("StackWeaponToggle", {
-    Title = "Stack Weapon",
-    Default = Config.StackWeapon,
+KillAuraToggleObj = Tabs.Main:AddToggle("KillAuraToggle", {
+    Title = "Kill Aura",
+    Default = Config.KillAuraEnabled,
     Callback = function(Value)
-        Config.StackWeapon = Value
+        Config.KillAuraEnabled = Value
+        if not Value then
+            restoreAllSounds()
+        end
+        SaveConfig()
+    end
+})
+
+KillAuraSliderObj = Tabs.Main:AddSlider("KillAuraDistanceSlider", {
+    Title = "Aura Distance",
+    Default = Config.KillAuraDistance,
+    Min = 10,
+    Max = 2000,
+    Rounding = 0,
+    Callback = function(Value)
+        Config.KillAuraDistance = Value
         SaveConfig()
     end
 })
@@ -1622,6 +1675,17 @@ FastAttackSliderObj = Tabs.Main:AddSlider("FastAttackSlider", {
     end
 })
 
+Tabs.Main:AddToggle("StackWeaponToggle", {
+    Title = "Stack Weapon",
+    Default = Config.StackWeapon,
+    Callback = function(Value)
+        Config.StackWeapon = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Main:AddSection("Mob")
+
 NPCHitboxToggleObj = Tabs.Main:AddToggle("NPCHitboxToggle", {
     Title = "Enable NPC Hitbox",
     Default = Config.NPCHitboxEnabled,
@@ -1645,116 +1709,6 @@ NPCHitboxSliderObj = Tabs.Main:AddSlider("NPCHitboxSlider", {
         SaveConfig()
     end
 })
-
-Tabs.Main:AddSection("Auto Heal")
-
-Tabs.Main:AddParagraph({
-    Title = "Auto Heal Note",
-    Content = "Set the HP % threshold The  will only consume potions if your HP falls at or below this percentage."
-})
-
-Tabs.Main:AddToggle("AutoHealToggle", {
-    Title = "Auto Heal",
-    Default = Config.AutoHealEnabled,
-    Callback = function(Value)
-        Config.AutoHealEnabled = Value
-        SaveConfig()
-    end
-})
-
-Tabs.Main:AddSlider("AutoHealSlider", {
-    Title = "HP %",
-    Default = Config.AutoHealThreshold,
-    Min = 1,
-    Max = 99,
-    Rounding = 0,
-    Callback = function(Value)
-        Config.AutoHealThreshold = Value
-        SaveConfig()
-    end
-})
-
-Tabs.Main:AddSection("Items")
-
-Tabs.Main:AddParagraph({
-    Title = "Bring Items Note",
-    Content = "You must equip the Sack and put the items into it to prevent errors!"
-})
-
-Tabs.Main:AddButton({
-    Title = "Bring Nearby Items",
-    Description = "Requires Sack equipped",
-    Callback = function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if isValidDroppedItem(obj) then
-                local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                if part then
-                    local dist = (part.Position - root.Position).Magnitude
-                    local rarity = getItemRarity(obj)
-                    if dist <= Config.BringItemRange and Config.BringItemRarities[rarity] then
-                        local cam = game:GetService("Workspace").CurrentCamera
-                        local flatLook = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z).Unit
-                        local flatRight = Vector3.new(cam.CFrame.RightVector.X, 0, cam.CFrame.RightVector.Z).Unit
-                        local forwardDist = math.random(8, 12)
-                        local sideDist = math.random(-4, 4)
-                        local xz = root.Position + flatLook * forwardDist + flatRight * sideDist
-                        local rayParams = RaycastParams.new()
-                        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, obj}
-                        local rayResult = workspace:Raycast(
-                            xz + Vector3.new(0, 500, 0),
-                            Vector3.new(0, -1000, 0),
-                            rayParams
-                        )
-                        local groundY = rayResult and rayResult.Position.Y or root.Position.Y
-                        part.CFrame = CFrame.new(Vector3.new(xz.X, groundY + 1, xz.Z))
-                        if not part.Anchored then
-                            part.Velocity = Vector3.new(0, 0, 0)
-                            part.RotVelocity = Vector3.new(0, 0, 0)
-                        end
-                    end
-                end
-            end
-        end
-    end
-})
-
-Tabs.Main:AddSlider("BringItemRangeSlider", {
-    Title = "Bring Range",
-    Default = Config.BringItemRange,
-    Min = 10,
-    Max = 1000,
-    Rounding = 0,
-    Callback = function(Value)
-        Config.BringItemRange = Value
-        SaveConfig()
-    end
-})
-
-Tabs.Main:AddDropdown("BringRarityDropdown", {
-    Title = "Bring Rarities",
-    Values = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Transcended"},
-    Default = {},
-    Multi = true,
-    ScrollingEnabled = true,
-    Callback = function(Value)
-        for rarity, _ in pairs(Config.BringItemRarities) do
-            Config.BringItemRarities[rarity] = false
-        end
-        for rarity, selected in pairs(Value) do
-            if selected then
-                Config.BringItemRarities[rarity] = true
-            end
-        end
-        SaveConfig()
-    end
-})
-
-Tabs.Main:AddSection("Mobs")
 
 Tabs.Main:AddToggle("AutoBringMobsToggle", {
     Title = "Auto Bring Mobs",
@@ -1789,6 +1743,18 @@ Tabs.Main:AddInput("BringMobOffsetInput", {
             Config.BringMobOffset = parsed
             SaveConfig()
         end
+    end
+})
+
+Tabs.Main:AddSection("Mining")
+
+Tabs.Main:AddToggle("AutoMineToggle", {
+    Title = "Auto Mine",
+    Description = "Equip tool and stand near trees or rocks, do not click",
+    Default = Config.AutoMineEnabled,
+    Callback = function(Value)
+        Config.AutoMineEnabled = Value
+        SaveConfig()
     end
 })
 
@@ -1852,10 +1818,15 @@ Tabs.ESP:AddToggle("ESPItemToggle", {
     end
 })
 
+local allItemRarities = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Transcended"}
+for _, r in ipairs(allItemRarities) do
+    Config.ItemESPRarities[r] = true
+end
+
 Tabs.ESP:AddDropdown("ItemESPRarityDropdown", {
     Title = "Select Item ESP",
     Values = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Transcended"},
-    Default = {},
+    Default = allItemRarities,
     Multi = true,
     ScrollingEnabled = true,
     Callback = function(Value)
@@ -1890,6 +1861,27 @@ Tabs.ESP:AddToggle("ESPOreToggle", {
     end
 })
 
+Tabs.Player:AddToggle("LoopSpeedToggle", {
+    Title = "Enable WalkSpeed",
+    Default = Config.LoopSpeedEnabled,
+    Callback = function(Value)
+        Config.LoopSpeedEnabled = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Player:AddSlider("WalkSpeedSlider", {
+    Title = "Speed Amount",
+    Default = Config.WalkSpeed,
+    Min = 16,
+    Max = 250,
+    Rounding = 0,
+    Callback = function(Value)
+        Config.WalkSpeed = Value
+        SaveConfig()
+    end
+})
+
 Tabs.Player:AddToggle("FlyToggle", {
     Title = "Fly",
     Default = Config.FlyEnabled,
@@ -1916,27 +1908,6 @@ Tabs.Player:AddSlider("FlySpeedSlider", {
     end
 })
 
-Tabs.Player:AddToggle("LoopSpeedToggle", {
-    Title = "Enable WalkSpeed",
-    Default = Config.LoopSpeedEnabled,
-    Callback = function(Value)
-        Config.LoopSpeedEnabled = Value
-        SaveConfig()
-    end
-})
-
-Tabs.Player:AddSlider("WalkSpeedSlider", {
-    Title = "Speed Amount",
-    Default = Config.WalkSpeed,
-    Min = 16,
-    Max = 250,
-    Rounding = 0,
-    Callback = function(Value)
-        Config.WalkSpeed = Value
-        SaveConfig()
-    end
-})
-
 Tabs.Player:AddToggle("NoclipToggle", {
     Title = "Noclip",
     Default = Config.NoclipEnabled,
@@ -1955,7 +1926,185 @@ Tabs.Player:AddToggle("InfJumpToggle", {
     end
 })
 
-BringBurgerToggleObj = Tabs.Misc:AddToggle("BringBurgerToggle", {
+Tabs.Player:AddSlider("DashPowerSlider", {
+    Title = "Dash Distance",
+    Default = Config.DashPower,
+    Min = 20,
+    Max = 1000,
+    Rounding = 0,
+    Callback = function(Value)
+        Config.DashPower = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Player:AddToggle("DashFloatToggle", {
+    Title = "Show Dash Button",
+    Default = Config.DashFloatVisible,
+    Callback = function(Value)
+        if dashFloatBtn then
+            dashFloatBtn.Visible = Value
+        end
+        Config.DashFloatVisible = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Player:AddToggle("AirWeldToggle", {
+    Title = "Air Weld",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            oldNamecall_aw = hookmetamethod(game, "__namecall", function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                if method == "GetPartsInPart" and self == workspace and not checkcaller() then
+                    local params = args[2]
+                    if params and typeof(params) == "OverlapParams" then
+                        local filter = params.FilterDescendantsInstances
+                        if filter and type(filter) == "table" and filter[1] and filter[1].Name == "Cart" then
+                            local cart = workspace:FindFirstChild("Cart")
+                            if cart then
+                                local wagons = cart:FindFirstChild("Wagons")
+                                if wagons then
+                                    local targetPart = nil
+                                    for _, wagon in ipairs(wagons:GetChildren()) do
+                                        local floor = wagon:FindFirstChild("Floor")
+                                        if floor and floor:FindFirstChildWhichIsA("BasePart") then
+                                            targetPart = floor:FindFirstChildWhichIsA("BasePart")
+                                            break
+                                        end
+                                    end
+                                    if targetPart then
+                                        return {targetPart}
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                return oldNamecall_aw(self, ...)
+            end)
+        else
+            if oldNamecall_aw then
+                hookmetamethod(game, "__namecall", oldNamecall_aw)
+                oldNamecall_aw = nil
+            end
+        end
+    end
+})
+
+Tabs.Player:AddSection("Auto Heal")
+
+Tabs.Player:AddToggle("AutoHealToggle", {
+    Title = "Auto Heal",
+    Default = Config.AutoHealEnabled,
+    Callback = function(Value)
+        Config.AutoHealEnabled = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Player:AddSlider("AutoHealSlider", {
+    Title = "HP %",
+    Default = Config.AutoHealThreshold,
+    Min = 1,
+    Max = 99,
+    Rounding = 0,
+    Callback = function(Value)
+        Config.AutoHealThreshold = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Item:AddSection("Bring Item")
+
+Tabs.Item:AddParagraph({
+    Title = "Bring Items Note",
+    Content = "You must equip the Sack and put the items into it to prevent errors!"
+})
+
+Tabs.Item:AddButton({
+    Title = "Bring Nearby Items",
+    Description = "Requires Sack equipped",
+    Callback = function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if isValidDroppedItem(obj) then
+                local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    local dist = (part.Position - root.Position).Magnitude
+                    local rarity = getItemRarity(obj)
+                    if dist <= Config.BringItemRange and Config.BringItemRarities[rarity] then
+                        local cam = game:GetService("Workspace").CurrentCamera
+                        local flatLook = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z).Unit
+                        local flatRight = Vector3.new(cam.CFrame.RightVector.X, 0, cam.CFrame.RightVector.Z).Unit
+                        local forwardDist = math.random(8, 12)
+                        local sideDist = math.random(-4, 4)
+                        local xz = root.Position + flatLook * forwardDist + flatRight * sideDist
+                        local rayParams = RaycastParams.new()
+                        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, obj}
+                        local rayResult = workspace:Raycast(
+                            xz + Vector3.new(0, 500, 0),
+                            Vector3.new(0, -1000, 0),
+                            rayParams
+                        )
+                        local groundY = rayResult and rayResult.Position.Y or root.Position.Y
+                        part.CFrame = CFrame.new(Vector3.new(xz.X, groundY + 1, xz.Z))
+                        if not part.Anchored then
+                            part.Velocity = Vector3.new(0, 0, 0)
+                            part.RotVelocity = Vector3.new(0, 0, 0)
+                        end
+                    end
+                end
+            end
+        end
+    end
+})
+
+Tabs.Item:AddSlider("BringItemRangeSlider", {
+    Title = "Bring Range",
+    Default = Config.BringItemRange,
+    Min = 10,
+    Max = 1000,
+    Rounding = 0,
+    Callback = function(Value)
+        Config.BringItemRange = Value
+        SaveConfig()
+    end
+})
+
+local allBringRarities = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Transcended"}
+for _, r in ipairs(allBringRarities) do
+    Config.BringItemRarities[r] = true
+end
+
+Tabs.Item:AddDropdown("BringRarityDropdown", {
+    Title = "Bring Rarities",
+    Values = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Transcended"},
+    Default = allBringRarities,
+    Multi = true,
+    ScrollingEnabled = true,
+    Callback = function(Value)
+        for rarity, _ in pairs(Config.BringItemRarities) do
+            Config.BringItemRarities[rarity] = false
+        end
+        for rarity, selected in pairs(Value) do
+            if selected then
+                Config.BringItemRarities[rarity] = true
+            end
+        end
+        SaveConfig()
+    end
+})
+
+Tabs.Item:AddSection("Burgers & Potions")
+
+BringBurgerToggleObj = Tabs.Item:AddToggle("BringBurgerToggle", {
     Title = "Bring Burger",
     Default = Config.BringBurger,
     Callback = function(Value)
@@ -1964,7 +2113,7 @@ BringBurgerToggleObj = Tabs.Misc:AddToggle("BringBurgerToggle", {
     end
 })
 
-Tabs.Misc:AddToggle("BringManaToggle", {
+Tabs.Item:AddToggle("BringManaToggle", {
     Title = "Bring Mana Potion",
     Default = Config.BringMana,
     Callback = function(Value)
@@ -1973,7 +2122,7 @@ Tabs.Misc:AddToggle("BringManaToggle", {
     end
 })
 
-Tabs.Misc:AddToggle("BringGreaterManaToggle", {
+Tabs.Item:AddToggle("BringGreaterManaToggle", {
     Title = "Bring Greater Mana Potion",
     Default = Config.BringGreaterMana,
     Callback = function(Value)
@@ -1982,7 +2131,7 @@ Tabs.Misc:AddToggle("BringGreaterManaToggle", {
     end
 })
 
-Tabs.Misc:AddToggle("BringHealToggle", {
+Tabs.Item:AddToggle("BringHealToggle", {
     Title = "Bring Heal Potion",
     Default = Config.BringHeal,
     Callback = function(Value)
@@ -1991,7 +2140,7 @@ Tabs.Misc:AddToggle("BringHealToggle", {
     end
 })
 
-Tabs.Misc:AddToggle("BringGreaterHealToggle", {
+Tabs.Item:AddToggle("BringGreaterHealToggle", {
     Title = "Bring Greater Heal Potion",
     Default = Config.BringGreaterHeal,
     Callback = function(Value)
@@ -2000,7 +2149,16 @@ Tabs.Misc:AddToggle("BringGreaterHealToggle", {
     end
 })
 
-Tabs.Misc:AddSlider("BringDistanceSlider", {
+Tabs.Item:AddToggle("BringSpeedToggle", {
+    Title = "Bring Speed Potion",
+    Default = Config.BringSpeed,
+    Callback = function(Value)
+        Config.BringSpeed = Value
+        SaveConfig()
+    end
+})
+
+Tabs.Item:AddSlider("BringDistanceSlider", {
     Title = "Bring Distance",
     Default = Config.BringPotionDistance or 6,
     Min = 3,
@@ -2012,12 +2170,47 @@ Tabs.Misc:AddSlider("BringDistanceSlider", {
     end
 })
 
-Tabs.Misc:AddToggle("AutoMineToggle", {
-    Title = "Auto Mine",
-    Default = Config.AutoMineEnabled,
+Tabs.Item:AddSection("Money Bag")
+
+local function getGoldBagPrompt(obj)
+    for _, v in ipairs(obj:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            return v
+        end
+    end
+    return nil
+end
+
+local function handleGoldBag(obj)
+    if obj.Name ~= "GoldBag" then return end
+    task.spawn(function()
+        local prompt = getGoldBagPrompt(obj)
+        if not prompt then
+            prompt = obj:WaitForChild("ProximityPrompt", 3)
+        end
+        if prompt then
+            task.wait(0.2)
+            if Config.AutoPickGoldBagEnabled then
+                prompt.MaxActivationDistance = 1000
+                fireproximityprompt(prompt, prompt.HoldDuration)
+            end
+        end
+    end)
+end
+
+workspace.DescendantAdded:Connect(handleGoldBag)
+
+Tabs.Item:AddToggle("AutoPickGoldBagToggle", {
+    Title = "Auto Pick Up Money Bag",
+    Default = Config.AutoPickGoldBagEnabled,
     Callback = function(Value)
-        Config.AutoMineEnabled = Value
+        Config.AutoPickGoldBagEnabled = Value
         SaveConfig()
+        if Value then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                handleGoldBag(obj)
+            end
+        end
     end
 })
 
@@ -2052,48 +2245,6 @@ Tabs.Misc:AddToggle("InstantPromptToggle", {
                 else
                     restoreInstantPrompt(prompt)
                 end
-            end
-        end
-    end
-})
-
-local function getGoldBagPrompt(obj)
-    for _, v in ipairs(obj:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            return v
-        end
-    end
-    return nil
-end
-
-local function handleGoldBag(obj)
-    if obj.Name ~= "GoldBag" then return end
-    task.spawn(function()
-        local prompt = getGoldBagPrompt(obj)
-        if not prompt then
-            prompt = obj:WaitForChild("ProximityPrompt", 3)
-        end
-        if prompt then
-            task.wait(0.2)
-            if Config.AutoPickGoldBagEnabled then
-                prompt.MaxActivationDistance = 1000
-                fireproximityprompt(prompt, prompt.HoldDuration)
-            end
-        end
-    end)
-end
-
-workspace.DescendantAdded:Connect(handleGoldBag)
-
-Tabs.Misc:AddToggle("AutoPickGoldBagToggle", {
-    Title = "Auto Pick Up Money Bag",
-    Default = Config.AutoPickGoldBagEnabled,
-    Callback = function(Value)
-        Config.AutoPickGoldBagEnabled = Value
-        SaveConfig()
-        if Value then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                handleGoldBag(obj)
             end
         end
     end
@@ -2135,12 +2286,21 @@ local function getDashKey()
     return Enum.KeyCode[name] or Enum.KeyCode.Q
 end
 
+Tabs.Settings:AddToggle("DashKeybindToggle", {
+    Title = "Enable Dash Keybind",
+    Default = Config.DashKeybindEnabled ~= false,
+    Callback = function(Value)
+        Config.DashKeybindEnabled = Value
+        SaveConfig()
+    end
+})
+
 Tabs.Settings:AddKeybind("DashKeybind", {
     Title = "Dash Keybind",
     Mode = "Toggle",
     Default = Config.DashKeybind or "Q",
     Callback = function()
-        if performDash then
+        if Config.DashKeybindEnabled ~= false and performDash then
             performDash()
         end
     end,
@@ -2154,6 +2314,7 @@ Tabs.Settings:AddKeybind("DashKeybind", {
 })
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if Config.DashKeybindEnabled == false then return end
     if UserInputService:GetFocusedTextBox() then return end
     if input.UserInputType == Enum.UserInputType.Keyboard then
         local targetKey = getDashKey()
@@ -2165,9 +2326,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
-local airWeldConn = nil
-local oldNamecall_aw
-oldNamecall_aw = nil
+
 
 local function makeDraggableFloat(b, posKey)
     local dragging, moved, startPos, startBtnPos, activeInput = false, false, nil, nil, nil
@@ -2229,7 +2388,7 @@ local function setFloatStrokeActive(stroke, active)
     end
 end
 
-local dashFloatBtn = Instance.new("TextButton")
+dashFloatBtn = Instance.new("TextButton")
 local dp = Config.DashFloatPos
 dashFloatBtn.Size = UDim2.new(0, 46, 0, 46)
 dashFloatBtn.Position = UDim2.new(dp.xs, dp.xo, dp.ys, dp.yo)
@@ -2298,97 +2457,6 @@ dashFloatBtn.MouseButton1Click:Connect(function()
     if getMoved() then resetMoved() return end
     performDash()
 end)
-
-KillAuraToggleObj = Tabs.AirWeld:AddToggle("KillAuraToggle", {
-    Title = "Kill Aura",
-    Default = Config.KillAuraEnabled,
-    Callback = function(Value)
-        Config.KillAuraEnabled = Value
-        if not Value then
-            restoreAllSounds()
-        end
-        SaveConfig()
-    end
-})
-
-KillAuraSliderObj = Tabs.AirWeld:AddSlider("KillAuraDistanceSlider", {
-    Title = "Aura Distance",
-    Default = Config.KillAuraDistance,
-    Min = 10,
-    Max = 2000,
-    Rounding = 0,
-    Callback = function(Value)
-        Config.KillAuraDistance = Value
-        SaveConfig()
-    end
-})
-
-Tabs.AirWeld:AddSlider("DashPowerSlider", {
-    Title = "Dash Distance",
-    Default = Config.DashPower,
-    Min = 20,
-    Max = 1000,
-    Rounding = 0,
-    Callback = function(Value)
-        Config.DashPower = Value
-        SaveConfig()
-    end
-})
-
-Tabs.AirWeld:AddToggle("DashFloatToggle", {
-    Title = "Show Dash Button",
-    Default = Config.DashFloatVisible,
-    Callback = function(Value)
-        dashFloatBtn.Visible = Value
-        Config.DashFloatVisible = Value
-        SaveConfig()
-    end
-})
-
-Tabs.AirWeld:AddToggle("AirWeldToggle", {
-    Title = "Air Weld",
-    Default = false,
-    Callback = function(Value)
-        if Value then
-            oldNamecall_aw = hookmetamethod(game, "__namecall", function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-                if method == "GetPartsInPart" and self == workspace and not checkcaller() then
-                    local params = args[2]
-                    if params and typeof(params) == "OverlapParams" then
-                        local filter = params.FilterDescendantsInstances
-                        if filter and type(filter) == "table" and filter[1] and filter[1].Name == "Cart" then
-                            local cart = workspace:FindFirstChild("Cart")
-                            if cart then
-                                local wagons = cart:FindFirstChild("Wagons")
-                                if wagons then
-                                    local targetPart = nil
-                                    for _, wagon in ipairs(wagons:GetChildren()) do
-                                        local floor = wagon:FindFirstChild("Floor")
-                                        if floor and floor:FindFirstChildWhichIsA("BasePart") then
-                                            targetPart = floor:FindFirstChildWhichIsA("BasePart")
-                                            break
-                                        end
-                                    end
-                                    if targetPart then
-                                        return {targetPart}
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                return oldNamecall_aw(self, ...)
-            end)
-        else
-            if oldNamecall_aw then
-                hookmetamethod(game, "__namecall", oldNamecall_aw)
-                oldNamecall_aw = nil
-            end
-        end
-    end
-})
-
 
 local isHealing = false
 local function checkAndHeal(humanoid, char)
