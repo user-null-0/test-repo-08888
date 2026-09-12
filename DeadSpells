@@ -37,6 +37,7 @@ local Config = {
     BringHeal = false,
     BringGreaterHeal = false,
     BringSpeed = false,
+    BringVitality = false,
     BringPotionDistance = 6,
     AutoBringMobs = false,
     BringMobRange = 100,
@@ -840,19 +841,12 @@ local burgerColors = { ["Burger"] = Color3.fromRGB(205, 133, 63), ["GoldenBurger
 
 local itemQueue = {}
 local activeBurgers = {}
-local currentTarget = nil
-local processTimer = 0
-
 local manaQueue = {}
-local currentManaTarget = nil
-local manaTimer = 0
-
+local greaterManaQueue = {}
 local healQueue = {}
-local currentHealTarget = nil
-local healTimer = 0
-
+local greaterHealQueue = {}
 local speedQueue = {}
-local currentSpeedTarget = nil
+local vitalityQueue = {}
 
 local activeItemESP = {}
 
@@ -939,28 +933,45 @@ local function isItemEquipped(obj)
     return false
 end
 
-local function isValidDroppedItem(obj)
-    if not obj:IsA("Model") then return false end
-    if not obj.Parent then return false end
-    local nameLower = string.lower(obj.Name)
-    local blacklist = {
-        "rock","bite","ruins","box","burger","model",
-        "tree","bush","plant","grass","flower","mushroom","log","branch","stump",
-        "wall","floor","door","fence","gate","pillar","statue","chest",
-        "npc","mob","enemy","boss","monster","creature",
-        "part","mesh","union","wedge","frame","joint"
-    }
-    for _, kw in ipairs(blacklist) do
-        if string.find(nameLower, kw) then return false end
+local function hasItemData(obj)
+    for _, child in ipairs(obj:GetDescendants()) do
+        if child:IsA("StringValue") then
+            local valLower = string.lower(child.Value)
+            if valLower == "common" or valLower == "uncommon" or valLower == "rare"
+            or valLower == "epic" or valLower == "legendary" or valLower == "mythic"
+            or valLower == "mythical" or valLower == "transcended"
+            or valLower == "sellable" or valLower == "usable" or valLower == "valuable"
+            or valLower == "fuel" or valLower == "tool" or valLower == "junk"
+            or valLower == "potion" or valLower == "weapon" or valLower == "armor" then
+                return true
+            end
+        elseif child:IsA("IntValue") or child:IsA("NumberValue") then
+            local nLower = string.lower(child.Name)
+            if string.find(nLower, "price") or string.find(nLower, "value") or child.Name == "Gold" or child.Name == "Mana" then
+                if child.Value > 0 then return true end
+            end
+        end
     end
-    if obj:FindFirstChildOfClass("Humanoid") or isItemEquipped(obj) then return false end
-    if obj:FindFirstAncestorWhichIsA("Tool") then return false end
+    if obj:GetAttribute("Rarity") or obj:GetAttribute("Tier") or obj:GetAttribute("Price") or obj:GetAttribute("Value") then
+        return true
+    end
+    return false
+end
+
+local function isValidDroppedItem(obj)
+    if not (obj:IsA("Model") or obj:IsA("Tool")) then return false end
+    if not obj.Parent then return false end
+    if isItemEquipped(obj) then return false end
     if targetItems[obj.Name] then return false end
     local mapFolder = workspace:FindFirstChild("Map")
     if mapFolder and obj:IsDescendantOf(mapFolder) then return false end
-    if obj:FindFirstChildOfClass("Configuration") then
-        local size = obj:GetExtentsSize()
-        if size.X < 15 and size.Y < 15 and size.Z < 15 then return true end
+    if obj:FindFirstChildOfClass("Humanoid") then return false end
+
+    if hasItemData(obj) then
+        local size = obj:IsA("Model") and obj:GetExtentsSize() or (obj:IsA("BasePart") and obj.Size) or Vector3.new(2, 2, 2)
+        if size.X < 35 and size.Y < 35 and size.Z < 35 then
+            return true
+        end
     end
     return false
 end
@@ -1006,13 +1017,19 @@ local function cleanupAllItemESP()
 end
 
 local function scanItemESP()
-    for _, obj in pairs(workspace:GetDescendants()) do
+    if not Config.ItemESPEnabled then return end
+    for _, obj in ipairs(workspace:GetChildren()) do
         if isValidDroppedItem(obj) then createItemESP(obj) end
+    end
+    local m = workspace:FindFirstChild("Models")
+    if m then
+        for _, obj in ipairs(m:GetChildren()) do
+            if isValidDroppedItem(obj) then createItemESP(obj) end
+        end
     end
 end
 
 workspace.DescendantAdded:Connect(function(descendant)
-    task.wait(0.1)
     if Config.ItemESPEnabled and isValidDroppedItem(descendant) then
         createItemESP(descendant)
     end
@@ -1090,7 +1107,11 @@ local function addToQueue(obj)
     end
 end
 
-for _, obj in ipairs(workspace:GetDescendants()) do addToQueue(obj) end
+for _, obj in ipairs(workspace:GetChildren()) do if targetItems[obj.Name] then addToQueue(obj) end end
+local modelsFolder = workspace:FindFirstChild("Models")
+if modelsFolder then
+    for _, obj in ipairs(modelsFolder:GetChildren()) do if targetItems[obj.Name] then addToQueue(obj) end end
+end
 workspace.DescendantAdded:Connect(addToQueue)
 
 local function updateBurgerESP()
@@ -1126,60 +1147,79 @@ local function updateBurgerESP()
     end
 end
 
+local targetPotions = {
+    ["ManaPotion"] = "Mana",
+    ["GreaterManaPotion"] = "GreaterMana",
+    ["HealingPotion"] = "Heal",
+    ["HealthPotion"] = "Heal",
+    ["GreaterHealthPotion"] = "GreaterHeal",
+    ["GreaterHealingPotion"] = "GreaterHeal",
+    ["SpeedPotion"] = "Speed",
+    ["PotionOfVitality"] = "Vitality",
+    ["VitalityPotion"] = "Vitality"
+}
+
 local function isValidPotion(obj)
-    return obj and obj.Parent ~= nil
+    if not (obj and obj.Parent) then return false end
+    if not obj:IsDescendantOf(workspace) then return false end
+    if isItemEquipped(obj) then return false end
+    local map = workspace:FindFirstChild("Map")
+    if map and obj:IsDescendantOf(map) then return false end
+    return true
 end
 
-local function isManaPotion(obj)
-    if not (obj and obj:IsA("Model") and (obj.Name == "ManaPotion" or obj.Name == "GreaterManaPotion")) then return false end
-    if not obj:FindFirstChildOfClass("Configuration") then return false end
-    local modelsFolder = workspace:FindFirstChild("Models")
-    return modelsFolder and obj:IsDescendantOf(modelsFolder)
-end
-
-local function isHealPotion(obj)
-    if not (obj and obj:IsA("Model") and (obj.Name == "HealingPotion" or obj.Name == "GreaterHealthPotion")) then return false end
-    if not obj:FindFirstChildOfClass("Configuration") then return false end
-    local modelsFolder = workspace:FindFirstChild("Models")
-    return modelsFolder and obj:IsDescendantOf(modelsFolder)
-end
-
-local function addToManaQueue(obj)
-    if isManaPotion(obj) then
-        for _, v in ipairs(manaQueue) do if v == obj then return end end
-        table.insert(manaQueue, obj)
+local function setupPotionPrompt(obj)
+    for _, p in ipairs(obj:GetDescendants()) do
+        if p:IsA("ProximityPrompt") then
+            p.RequiresLineOfSight = false
+            if p.MaxActivationDistance < 25 then
+                p.MaxActivationDistance = 25
+            end
+        end
     end
 end
 
-local function addToHealQueue(obj)
-    if isHealPotion(obj) then
-        for _, v in ipairs(healQueue) do if v == obj then return end end
-        table.insert(healQueue, obj)
+local function addPotionToQueue(obj)
+    local pType = targetPotions[obj.Name]
+    if not pType then return end
+    if not isValidPotion(obj) then return end
+
+    local q
+    if pType == "Heal" then q = healQueue
+    elseif pType == "GreaterHeal" then q = greaterHealQueue
+    elseif pType == "Mana" then q = manaQueue
+    elseif pType == "GreaterMana" then q = greaterManaQueue
+    elseif pType == "Speed" then q = speedQueue
+    elseif pType == "Vitality" then q = vitalityQueue
+    end
+
+    if q then
+        for _, v in ipairs(q) do
+            if v == obj then return end
+        end
+        table.insert(q, obj)
+        setupPotionPrompt(obj)
     end
 end
 
-local function isSpeedPotion(obj)
-    if not (obj and obj:IsA("Model") and (obj.Name == "SpeedPotion" or string.find(obj.Name, "SpeedPotion"))) then return false end
-    local modelsFolder = workspace:FindFirstChild("Models")
-    return modelsFolder and obj:IsDescendantOf(modelsFolder)
-end
-
-local function addToSpeedQueue(obj)
-    if isSpeedPotion(obj) then
-        for _, v in ipairs(speedQueue) do if v == obj then return end end
-        table.insert(speedQueue, obj)
+local function scanAllPotions()
+    for _, obj in ipairs(workspace:GetChildren()) do
+        addPotionToQueue(obj)
+    end
+    local m = workspace:FindFirstChild("Models")
+    if m then
+        for _, obj in ipairs(m:GetChildren()) do
+            addPotionToQueue(obj)
+        end
     end
 end
 
-for _, obj in ipairs(workspace:GetDescendants()) do
-    addToManaQueue(obj)
-    addToHealQueue(obj)
-    addToSpeedQueue(obj)
-end
+scanAllPotions()
+
 workspace.DescendantAdded:Connect(function(obj)
-    addToManaQueue(obj)
-    addToHealQueue(obj)
-    addToSpeedQueue(obj)
+    if targetPotions[obj.Name] then
+        addPotionToQueue(obj)
+    end
 end)
 
 local scanBurgerTimer = 0
@@ -1191,104 +1231,130 @@ task.spawn(function()
         scanBurgerTimer = scanBurgerTimer + dt
         if scanBurgerTimer >= 1.5 then
             scanBurgerTimer = 0
+            if Config.ItemESPEnabled then
+                scanItemESP()
+            end
             for _, obj in ipairs(workspace:GetChildren()) do
                 if targetItems[obj.Name] then addToQueue(obj) end
+                if targetPotions[obj.Name] then addPotionToQueue(obj) end
             end
             local m = workspace:FindFirstChild("Models")
             if m then
                 for _, obj in ipairs(m:GetChildren()) do
                     if targetItems[obj.Name] then addToQueue(obj) end
+                    if targetPotions[obj.Name] then addPotionToQueue(obj) end
                 end
             end
         end
     end
 end)
 
-RunService.RenderStepped:Connect(function()
-    if not Config.BringBurger then
-        return
+local function bringItemToPlayer(item, targetCFrame, camPos)
+    local targetPart = (item:IsA("Model") or item:IsA("Tool")) and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or (item:IsA("BasePart") and item)
+    if targetPart and (camPos - targetPart.Position).Magnitude <= 1000 then
+        if item:IsA("Model") or item:IsA("Tool") then
+            item:PivotTo(targetCFrame)
+            for _, p in ipairs(item:GetChildren()) do
+                if p:IsA("BasePart") then
+                    p.CanCollide = false
+                    p.AssemblyLinearVelocity = Vector3.zero
+                    p.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        elseif item:IsA("BasePart") then
+            item.CFrame = targetCFrame
+            item.CanCollide = false
+            item.AssemblyLinearVelocity = Vector3.zero
+            item.AssemblyAngularVelocity = Vector3.zero
+        end
     end
+end
 
-    local dist = Config.BringPotionDistance or 6
+RunService.RenderStepped:Connect(function()
+    local anyEnabled = Config.BringBurger or Config.BringMana or Config.BringGreaterMana or Config.BringHeal or Config.BringGreaterHeal or Config.BringSpeed or Config.BringVitality
+    if not anyEnabled then return end
+
+    local dist = 6
     local targetCFrame = Camera.CFrame * CFrame.new(0, 0, -dist)
     local camPos = Camera.CFrame.Position
 
-    for i = #itemQueue, 1, -1 do
-        local item = itemQueue[i]
-        if not isValidBurger(item) then
-            table.remove(itemQueue, i)
-        else
-            local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or (item:IsA("BasePart") and item)
-            if targetPart and (camPos - targetPart.Position).Magnitude <= 1000 then
-                if item:IsA("Model") then
-                    item:PivotTo(targetCFrame)
-                    for _, p in ipairs(item:GetChildren()) do
-                        if p:IsA("BasePart") then
-                            p.CanCollide = false
-                            p.AssemblyLinearVelocity = Vector3.zero
-                            p.AssemblyAngularVelocity = Vector3.zero
-                        end
-                    end
-                elseif item:IsA("BasePart") then
-                    item.CFrame = targetCFrame
-                    item.CanCollide = false
-                    item.AssemblyLinearVelocity = Vector3.zero
-                    item.AssemblyAngularVelocity = Vector3.zero
-                end
+    if Config.BringBurger then
+        for i = #itemQueue, 1, -1 do
+            local item = itemQueue[i]
+            if not isValidBurger(item) then
+                table.remove(itemQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
+            end
+        end
+    end
+
+    if Config.BringMana then
+        for i = #manaQueue, 1, -1 do
+            local item = manaQueue[i]
+            if not isValidPotion(item) then
+                table.remove(manaQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
+            end
+        end
+    end
+
+    if Config.BringGreaterMana then
+        for i = #greaterManaQueue, 1, -1 do
+            local item = greaterManaQueue[i]
+            if not isValidPotion(item) then
+                table.remove(greaterManaQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
+            end
+        end
+    end
+
+    if Config.BringHeal then
+        for i = #healQueue, 1, -1 do
+            local item = healQueue[i]
+            if not isValidPotion(item) then
+                table.remove(healQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
+            end
+        end
+    end
+
+    if Config.BringGreaterHeal then
+        for i = #greaterHealQueue, 1, -1 do
+            local item = greaterHealQueue[i]
+            if not isValidPotion(item) then
+                table.remove(greaterHealQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
+            end
+        end
+    end
+
+    if Config.BringSpeed then
+        for i = #speedQueue, 1, -1 do
+            local item = speedQueue[i]
+            if not isValidPotion(item) then
+                table.remove(speedQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
+            end
+        end
+    end
+
+    if Config.BringVitality then
+        for i = #vitalityQueue, 1, -1 do
+            local item = vitalityQueue[i]
+            if not isValidPotion(item) then
+                table.remove(vitalityQueue, i)
+            else
+                bringItemToPlayer(item, targetCFrame, camPos)
             end
         end
     end
 end)
-
-RunService.RenderStepped:Connect(function()
-    if not Config.BringMana then
-        currentManaTarget = nil
-        return
-    end
-    if not isValidPotion(currentManaTarget) then
-        for i = #manaQueue, 1, -1 do
-            if not isValidPotion(manaQueue[i]) then table.remove(manaQueue, i) end
-        end
-        currentManaTarget = #manaQueue > 0 and table.remove(manaQueue, 1) or nil
-    end
-    if currentManaTarget then
-        currentManaTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if not Config.BringHeal then
-        currentHealTarget = nil
-        return
-    end
-    if not isValidPotion(currentHealTarget) then
-        for i = #healQueue, 1, -1 do
-            if not isValidPotion(healQueue[i]) then table.remove(healQueue, i) end
-        end
-        currentHealTarget = #healQueue > 0 and table.remove(healQueue, 1) or nil
-    end
-    if currentHealTarget then
-        currentHealTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if not Config.BringSpeed then
-        currentSpeedTarget = nil
-        return
-    end
-    if not isValidPotion(currentSpeedTarget) then
-        for i = #speedQueue, 1, -1 do
-            if not isValidPotion(speedQueue[i]) then table.remove(speedQueue, i) end
-        end
-        currentSpeedTarget = #speedQueue > 0 and table.remove(speedQueue, 1) or nil
-    end
-    if currentSpeedTarget then
-        currentSpeedTarget:PivotTo(Camera.CFrame * CFrame.new(0, 0, -(Config.BringPotionDistance or 6)))
-    end
-end)
-
-
 
 local mineParams = RaycastParams.new()
 mineParams.FilterType = Enum.RaycastFilterType.Include
@@ -2109,6 +2175,17 @@ BringBurgerToggleObj = Tabs.Item:AddToggle("BringBurgerToggle", {
     Default = Config.BringBurger,
     Callback = function(Value)
         Config.BringBurger = Value
+        if Value then
+            for _, obj in ipairs(workspace:GetChildren()) do
+                if targetItems[obj.Name] then addToQueue(obj) end
+            end
+            local m = workspace:FindFirstChild("Models")
+            if m then
+                for _, obj in ipairs(m:GetChildren()) do
+                    if targetItems[obj.Name] then addToQueue(obj) end
+                end
+            end
+        end
         SaveConfig()
     end
 })
@@ -2118,6 +2195,7 @@ Tabs.Item:AddToggle("BringManaToggle", {
     Default = Config.BringMana,
     Callback = function(Value)
         Config.BringMana = Value
+        if Value then scanAllPotions() end
         SaveConfig()
     end
 })
@@ -2127,6 +2205,7 @@ Tabs.Item:AddToggle("BringGreaterManaToggle", {
     Default = Config.BringGreaterMana,
     Callback = function(Value)
         Config.BringGreaterMana = Value
+        if Value then scanAllPotions() end
         SaveConfig()
     end
 })
@@ -2136,6 +2215,7 @@ Tabs.Item:AddToggle("BringHealToggle", {
     Default = Config.BringHeal,
     Callback = function(Value)
         Config.BringHeal = Value
+        if Value then scanAllPotions() end
         SaveConfig()
     end
 })
@@ -2145,6 +2225,7 @@ Tabs.Item:AddToggle("BringGreaterHealToggle", {
     Default = Config.BringGreaterHeal,
     Callback = function(Value)
         Config.BringGreaterHeal = Value
+        if Value then scanAllPotions() end
         SaveConfig()
     end
 })
@@ -2154,21 +2235,21 @@ Tabs.Item:AddToggle("BringSpeedToggle", {
     Default = Config.BringSpeed,
     Callback = function(Value)
         Config.BringSpeed = Value
+        if Value then scanAllPotions() end
         SaveConfig()
     end
 })
 
-Tabs.Item:AddSlider("BringDistanceSlider", {
-    Title = "Bring Distance",
-    Default = Config.BringPotionDistance or 6,
-    Min = 3,
-    Max = 15,
-    Rounding = 1,
+Tabs.Item:AddToggle("BringVitalityToggle", {
+    Title = "Bring Potion of Vitality",
+    Default = Config.BringVitality,
     Callback = function(Value)
-        Config.BringPotionDistance = Value
+        Config.BringVitality = Value
+        if Value then scanAllPotions() end
         SaveConfig()
     end
 })
+
 
 Tabs.Item:AddSection("Money Bag")
 
