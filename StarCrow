@@ -6648,14 +6648,22 @@ tpPosBtn.MouseButton1Click:Connect(function()
         showCustomNotif("StarCrow Says:\n\n   Invalid format! Use: X, Y, Z", 3, "fail")
         return
     end
-    local x = tonumber(parts[1] and parts[1]:match("^%s*(.-)%s*$"))
-    local y = tonumber(parts[2] and parts[2]:match("^%s*(.-)%s*$"))
-    local z = tonumber(parts[3] and parts[3]:match("^%s*(.-)%s*$"))
-    if not x or not y or not z then
+    local nums = {}
+    for i, p in ipairs(parts) do
+        local n = tonumber(p and p:match("^%s*(.-)%s*$"))
+        if n then
+            table.insert(nums, n)
+        end
+    end
+    if #nums < 3 then
         showCustomNotif("StarCrow Says:\n\n   Invalid numbers! Use: X, Y, Z", 3, "fail")
         return
     end
-    S.manualPositionCFrame = CFrame.new(x, y, z)
+    if #nums >= 12 then
+        S.manualPositionCFrame = CFrame.new(unpack(nums))
+    else
+        S.manualPositionCFrame = CFrame.new(nums[1], nums[2], nums[3])
+    end
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if hrp then
@@ -6672,13 +6680,17 @@ copyPosBtn.MouseButton1Click:Connect(function()
         showCustomNotif("StarCrow Says:\n\n   HumanoidRootPart not found!", 3, "fail")
         return
     end
-    local pos = hrp.Position
-    local posText = string.format("%.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z)
-    posInput.Text = posText
-    if setclipboard then
-        setclipboard(posText)
+    local comps = {hrp.CFrame:GetComponents()}
+    local formatted = {}
+    for i, v in ipairs(comps) do
+        table.insert(formatted, string.format("%.2f", v))
     end
-    showCustomNotif("StarCrow Says:\n\n   Position copied!", 3, true)
+    local cframeText = table.concat(formatted, ", ")
+    posInput.Text = cframeText
+    if setclipboard then
+        setclipboard(cframeText)
+    end
+    showCustomNotif("StarCrow Says:\n\n   Position & Rotation copied!", 3, true)
 end)
 local SAVED_POS_FILE = "StarCrow/SavedPositions.json"
 local function loadSavedPositions()
