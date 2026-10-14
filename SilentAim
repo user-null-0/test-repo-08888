@@ -33,6 +33,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
 local currentTarget = nil
@@ -163,7 +164,7 @@ local NPCCache = {}
 local function AddToCache(obj)
     if obj:IsA("Model") and obj ~= LocalPlayer.Character then
         task.delay(0.2, function()
-            if obj and obj.Parent and obj:FindFirstChildOfClass("Humanoid") and (obj:FindFirstChild("Head") or obj:FindFirstChild("HumanoidRootPart")) then
+            if obj and obj.Parent and obj:FindFirstChildOfClass("Humanoid") and (obj:FindFirstChild("Head") or obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso") or obj:FindFirstChild("UpperTorso")) then
                 if not Players:GetPlayerFromCharacter(obj) then
                     if not table.find(NPCCache, obj) then
                         table.insert(NPCCache, obj)
@@ -320,6 +321,7 @@ local function updateAnimalESP()
 end
 
 RunService.RenderStepped:Connect(function()
+    Camera = workspace.CurrentCamera -- Luôn cập nhật Camera mới nhất
     if S.Config.AimMode == "FOV" and (S.Config.AimPlayer or S.Config.AimNPC) then
         fovCircle.Visible = true
         fovCircle.Size = UDim2.new(0, S.Config.FOVRadius * 2, 0, S.Config.FOVRadius * 2)
@@ -396,17 +398,29 @@ local function isFriend(player)
     return false
 end
 
+local function GetTargetPart(model)
+    if S.Config.AimPart == "Head" then
+        return model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+    else
+        return model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso") or model:FindFirstChild("Head")
+    end
+end
+
+-- Tăng tốc độ quét mục tiêu lên 0.03s để bám sát tâm hơn
 task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.03) do
+        Camera = workspace.CurrentCamera
         local char = LocalPlayer.Character
         isHoldingGun = char and char:FindFirstChildOfClass("Tool") ~= nil
         local canAim = S.Config.NoToolCheck or isHoldingGun
         local target = nil
-        if canAim and char and char:FindFirstChild("HumanoidRootPart") then
+        
+        if canAim and char and char:FindFirstChild("HumanoidRootPart") and Camera then
             local myPos = char.HumanoidRootPart.Position
             local shortestDist = S.Config.AimMode == "FOV" and S.Config.FOVRadius or math.huge
             local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
             local potentialTargets = {}
+            
             if S.Config.AimPlayer then
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character then
@@ -416,25 +430,36 @@ task.spawn(function()
                     end
                 end
             end
+            
             if S.Config.AimNPC then
                 for i = #NPCCache, 1, -1 do
-                    if NPCCache[i] and NPCCache[i].Parent then table.insert(potentialTargets, NPCCache[i])
-                    else table.remove(NPCCache, i) end
+                    if NPCCache[i] and NPCCache[i].Parent then 
+                        table.insert(potentialTargets, NPCCache[i])
+                    else 
+                        table.remove(NPCCache, i) 
+                    end
                 end
             end
+            
             for _, obj in ipairs(potentialTargets) do
                 local hum = obj:FindFirstChildOfClass("Humanoid")
-                local part = obj:FindFirstChild(S.Config.AimPart) or obj:FindFirstChild("Head")
+                local part = GetTargetPart(obj)
                 if hum and hum.Health > 0 and part then
                     if S.Config.WallCheck and not IsTargetVisible(part, char) then continue end
                     local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
                     if onScreen then
                         if S.Config.AimMode == "FOV" then
                             local distToCenter = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                            if distToCenter < shortestDist then target = part shortestDist = distToCenter end
+                            if distToCenter <= shortestDist then 
+                                target = part 
+                                shortestDist = distToCenter 
+                            end
                         else
                             local dist3D = (part.Position - myPos).Magnitude
-                            if dist3D < shortestDist then target = part shortestDist = dist3D end
+                            if dist3D < shortestDist then 
+                                target = part 
+                                shortestDist = dist3D 
+                            end
                         end
                     end
                 end
@@ -444,38 +469,98 @@ task.spawn(function()
     end
 end)
 
+-- HÀM KIỂM TRA ĐIỀU KIỆN SILENT AIM
+local function CanSilentAim()
+    if not (S.Config.AimPlayer or S.Config.AimNPC) then return false end
+    if not currentTarget or not currentTarget.Parent then return false end
+    if S.Config.ClickToAim and not S.Config.IsTapping then return false end
+    if not S.Config.NoToolCheck and not isHoldingGun then return false end
+    return true
+end
+
+local function GetPredictedPos()
+    local pos = currentTarget.Position
+    if S.Config.Prediction then
+        local vel = currentTarget.AssemblyLinearVelocity
+        if vel then
+            pos = pos + (vel * S.Config.PredictionFactor)
+        end
+    end
+    return pos
+end
+
+-- HỆ THỐNG HOOK UNIVERSAL MỚI (HỖ TRỢ MỌI GAME SAU UPDATE)
 local isNamecallHooked = false
 local oldNamecall
+local oldIndex
+local oldRaycast
 
 function InitSilentAimHook()
     if isNamecallHooked then return end
     isNamecallHooked = true
 
-    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        if not (S.Config.AimPlayer or S.Config.AimNPC) then return oldNamecall(self, ...) end
-        local method = getnamecallmethod()
-        
-        if not checkcaller() and self == workspace and currentTarget and (not S.Config.ClickToAim or S.Config.IsTapping) and (S.Config.NoToolCheck or isHoldingGun) then
-            if method == "Raycast" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-                local args = {...}
-                local targetPos = currentTarget.Position
-                
-                if S.Config.Prediction then
-                    local velocity = currentTarget.AssemblyLinearVelocity
-                    if velocity then targetPos = targetPos + (velocity * S.Config.PredictionFactor) end
+    -- 1. Hook trực tiếp hàm workspace.Raycast (chống Luau Fastcall)
+    if hookfunction and workspace.Raycast then
+        oldRaycast = hookfunction(workspace.Raycast, newcclosure(function(self, origin, direction, params)
+            if not checkcaller() and self == workspace and CanSilentAim() then
+                if typeof(origin) == "Vector3" and typeof(direction) == "Vector3" and direction.Magnitude > 5 then
+                    local targetPos = GetPredictedPos()
+                    direction = (targetPos - origin).Unit * direction.Magnitude
                 end
+            end
+            return oldRaycast(self, origin, direction, params)
+        end))
+    end
 
-                if method == "Raycast" and typeof(args[2]) == "Vector3" and args[2].Magnitude > 30 then
+    -- 2. Hook __namecall (Raycast, FindPartOnRay, Spherecast, Blockcast)
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        if not checkcaller() and self == workspace and CanSilentAim() then
+            local method = getnamecallmethod()
+            local args = table.pack(...)
+            local targetPos = GetPredictedPos()
+
+            if (method == "Raycast" or method == "raycast") and typeof(args[1]) == "Vector3" and typeof(args[2]) == "Vector3" then
+                if args[2].Magnitude > 5 then
                     args[2] = (targetPos - args[1]).Unit * args[2].Magnitude
-                    return oldNamecall(self, unpack(args))
-                elseif (method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay") and args[1] and args[1].Direction.Magnitude > 30 then
-                    args[1] = Ray.new(args[1].Origin, (targetPos - args[1].Origin).Unit * args[1].Direction.Magnitude)
-                    return oldNamecall(self, unpack(args))
+                    return oldNamecall(self, table.unpack(args, 1, args.n))
+                end
+            elseif (method == "FindPartOnRayWithIgnoreList" or method == "findPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay" or method == "findPartOnRay") and typeof(args[1]) == "Ray" then
+                local origRay = args[1]
+                if origRay.Direction.Magnitude > 5 then
+                    args[1] = Ray.new(origRay.Origin, (targetPos - origRay.Origin).Unit * origRay.Direction.Magnitude)
+                    return oldNamecall(self, table.unpack(args, 1, args.n))
+                end
+            elseif (method == "Spherecast" or method == "spherecast") and typeof(args[1]) == "Vector3" and typeof(args[3]) == "Vector3" then
+                if args[3].Magnitude > 5 then
+                    args[3] = (targetPos - args[1]).Unit * args[3].Magnitude
+                    return oldNamecall(self, table.unpack(args, 1, args.n))
+                end
+            elseif (method == "Blockcast" or method == "blockcast") and typeof(args[1]) == "CFrame" and typeof(args[3]) == "Vector3" then
+                if args[3].Magnitude > 5 then
+                    args[3] = (targetPos - args[1].Position).Unit * args[3].Magnitude
+                    return oldNamecall(self, table.unpack(args, 1, args.n))
                 end
             end
         end
         return oldNamecall(self, ...)
-    end)
+    end))
+
+    -- 3. Hook __index cho các game dùng Mouse.Hit / Mouse.Target / Mouse.UnitRay
+    oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+        if not checkcaller() and self == Mouse and CanSilentAim() then
+            local k = string.lower(tostring(key))
+            local targetPos = GetPredictedPos()
+            if k == "hit" then
+                return CFrame.new(targetPos)
+            elseif k == "target" then
+                return currentTarget
+            elseif k == "unitray" then
+                local origin = Camera.CFrame.Position
+                return Ray.new(origin, (targetPos - origin).Unit)
+            end
+        end
+        return oldIndex(self, key)
+    end))
 end
 
 local Window = Rayfield:CreateWindow({ 
@@ -570,4 +655,4 @@ ExtraTab:CreateButton({ Name = "Destroy UI", Callback = function()
 end })
 
 UserInputService.InputBegan:Connect(function(i, p) if not p and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then S.Config.IsTapping = true end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then S.Config.IsTapping = false end end) 
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then S.Config.IsTapping = false end end)
