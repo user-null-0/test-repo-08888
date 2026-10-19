@@ -167,6 +167,5 @@ task.spawn(function()
     task.wait(0.8)
     if animConnection then animConnection:Disconnect() end
     ScreenGui:Destroy()
-    safeLoad("https://raw.githubusercontent.com/user-null-0/test-repo-08888/refs/heads/main/Main")
+    safeLoad("https://raw.githubusercontent.com/user-null-0/StarCrow/refs/heads/main/Main")
 end)
-
