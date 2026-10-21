@@ -1,3 +1,16 @@
+local env = (getgenv and getgenv()) or _G
+if env.StarCrowHubLoaded then
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "StarCrow Hub",
+            Text = "Script is already executed!",
+            Duration = 5
+        })
+    end)
+    return
+end
+env.StarCrowHubLoaded = true
+
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
